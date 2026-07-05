@@ -38,6 +38,14 @@ function RootComponent() {
             >
               Companies
             </Link>
+            <Link
+              to="/board"
+              activeProps={{ className: 'bg-slate-800 text-teal-400 font-semibold' }}
+              inactiveProps={{ className: 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50' }}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors"
+            >
+              Kanban Board
+            </Link>
           </nav>
         </div>
         <div className="p-6 border-t border-slate-800 text-xs text-slate-500">
