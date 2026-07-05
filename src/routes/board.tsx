@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { Plus, Calendar, Trash2, Link2, DollarSign, Building, AlertCircle, X } from 'lucide-react'
 
 interface Company {
@@ -36,7 +37,7 @@ export const Route = createFileRoute('/board')({
   component: KanbanBoardComponent,
 })
 
-import { API_BASE } from '../lib/api'
+import { API_BASE, apiFetch, friendlyError } from '../lib/api'
 const STAGES = ['WISHLIST', 'APPLIED', 'ASSESSMENT', 'INTERVIEW', 'OFFERED', 'REJECTED'] as const
 type StageType = typeof STAGES[number]
 
@@ -68,18 +69,14 @@ function KanbanBoardComponent() {
   const { data: companies } = useQuery<Company[]>({
     queryKey: ['companies'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/companies`)
-      if (!res.ok) throw new Error('Failed to fetch companies')
-      return res.json()
+      return apiFetch<Company[]>(`${API_BASE}/companies`)
     },
   })
 
   const { data: applications, isLoading } = useQuery<Application[]>({
     queryKey: ['applications'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/applications`)
-      if (!res.ok) throw new Error('Failed to fetch applications')
-      return res.json()
+      return apiFetch<Application[]>(`${API_BASE}/applications`)
     },
   })
 
@@ -87,9 +84,7 @@ function KanbanBoardComponent() {
   const { data: selectedApplication } = useQuery<Application>({
     queryKey: ['applications', selectedAppId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/applications/${selectedAppId}`)
-      if (!res.ok) throw new Error('Failed to fetch application details')
-      return res.json()
+      return apiFetch<Application>(`${API_BASE}/applications/${selectedAppId}`)
     },
     enabled: selectedAppId !== null,
   })
@@ -97,33 +92,34 @@ function KanbanBoardComponent() {
   // Mutations
   const updateStageMutation = useMutation({
     mutationFn: async ({ id, stage }: { id: number; stage: StageType }) => {
-      const res = await fetch(`${API_BASE}/applications/${id}`, {
+      return apiFetch(`${API_BASE}/applications/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stage }),
       })
-      if (!res.ok) throw new Error('Failed to update stage')
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applications'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Stage updated')
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
     },
   })
 
   const createAppMutation = useMutation({
     mutationFn: async (newApp: any) => {
-      const res = await fetch(`${API_BASE}/applications`, {
+      return apiFetch(`${API_BASE}/applications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newApp),
       })
-      if (!res.ok) throw new Error('Failed to create application')
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applications'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Application created')
       setIsAddAppOpen(false)
       // reset form
       setNewCompanyId('')
@@ -134,52 +130,63 @@ function KanbanBoardComponent() {
       setNewExpectedSalary('')
       setNewStage('WISHLIST')
     },
+    onError: (err) => {
+      toast.error(friendlyError(err))
+    },
   })
 
   const deleteAppMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`${API_BASE}/applications/${id}`, {
+      return apiFetch(`${API_BASE}/applications/${id}`, {
         method: 'DELETE',
       })
-      if (!res.ok) throw new Error('Failed to delete application')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applications'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Application deleted')
       setSelectedAppId(null)
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
     },
   })
 
   const createNoteMutation = useMutation({
     mutationFn: async (newNote: any) => {
-      const res = await fetch(`${API_BASE}/notes`, {
+      return apiFetch(`${API_BASE}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newNote),
       })
-      if (!res.ok) throw new Error('Failed to create note')
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applications', selectedAppId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Note added')
       setNoteTitle('')
       setNoteContent('')
       setNoteType('GENERAL')
       setNoteEventDate('')
     },
+    onError: (err) => {
+      toast.error(friendlyError(err))
+    },
   })
 
   const deleteNoteMutation = useMutation({
     mutationFn: async (noteId: number) => {
-      const res = await fetch(`${API_BASE}/notes/${noteId}`, {
+      return apiFetch(`${API_BASE}/notes/${noteId}`, {
         method: 'DELETE',
       })
-      if (!res.ok) throw new Error('Failed to delete note')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applications', selectedAppId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Note deleted')
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
     },
   })
 

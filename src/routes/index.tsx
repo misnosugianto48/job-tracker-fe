@@ -47,17 +47,13 @@ export const Route = createFileRoute('/')({
   component: DashboardComponent,
 })
 
-import { API_BASE } from '../lib/api'
+import { API_BASE, apiFetch, friendlyError } from '../lib/api'
 
 function DashboardComponent() {
-  const { data, isLoading, isError } = useQuery<DashboardData>({
+  const { data, isLoading, isError, error } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/dashboard`)
-      if (!res.ok) {
-        throw new Error('Failed to fetch dashboard data')
-      }
-      return res.json()
+      return apiFetch<DashboardData>(`${API_BASE}/dashboard`)
     },
     refetchInterval: 10000, // Refetch every 10 seconds to keep stats live
   })
@@ -69,7 +65,7 @@ function DashboardComponent() {
   if (isError || !data) {
     return (
       <div className="bg-red-50 border-l-4 border-red-500 p-4 text-red-700 rounded-md text-sm">
-        Failed to load dashboard data. Make sure the backend server is running.
+        {friendlyError(error) || 'Could not load dashboard data. The server may be temporarily unavailable.'}
       </div>
     )
   }

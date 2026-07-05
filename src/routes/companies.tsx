@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 
 interface Company {
   id: number
@@ -16,7 +17,7 @@ export const Route = createFileRoute('/companies')({
   component: CompaniesComponent,
 })
 
-import { API_BASE } from '../lib/api'
+import { API_BASE, apiFetch, friendlyError } from '../lib/api'
 
 function CompaniesComponent() {
   const queryClient = useQueryClient()
@@ -40,32 +41,22 @@ function CompaniesComponent() {
   const { data: companies, isLoading, isError } = useQuery<Company[]>({
     queryKey: ['companies'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/companies`)
-      if (!res.ok) {
-        throw new Error('Failed to fetch companies')
-      }
-      return res.json()
+      return apiFetch<Company[]>(`${API_BASE}/companies`)
     },
   })
 
   // Mutation to create a company
   const createMutation = useMutation({
     mutationFn: async (newCompany: Omit<Company, 'id' | 'createdAt' | 'updatedAt'>) => {
-      const res = await fetch(`${API_BASE}/companies`, {
+      return apiFetch<Company>(`${API_BASE}/companies`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCompany),
       })
-      if (!res.ok) {
-        const errData = await res.json()
-        throw new Error(errData.error || 'Failed to create company')
-      }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] })
+      toast.success('Company added')
       setName('')
       setIndustry('')
       setLocation('')
@@ -73,6 +64,7 @@ function CompaniesComponent() {
       setError(null)
     },
     onError: (err: any) => {
+      toast.error(friendlyError(err))
       setError(err.message)
     },
   })
@@ -80,25 +72,20 @@ function CompaniesComponent() {
   // Mutation to update a company
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<Omit<Company, 'id' | 'createdAt' | 'updatedAt'>> }) => {
-      const res = await fetch(`${API_BASE}/companies/${id}`, {
+      return apiFetch<Company>(`${API_BASE}/companies/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
-      if (!res.ok) {
-        const errData = await res.json()
-        throw new Error(errData.error || 'Failed to update company')
-      }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] })
+      toast.success('Company updated')
       setEditingId(null)
       setError(null)
     },
     onError: (err: any) => {
+      toast.error(friendlyError(err))
       setError(err.message)
     },
   })
@@ -106,15 +93,16 @@ function CompaniesComponent() {
   // Mutation to delete a company
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`${API_BASE}/companies/${id}`, {
+      return apiFetch(`${API_BASE}/companies/${id}`, {
         method: 'DELETE',
       })
-      if (!res.ok) {
-        throw new Error('Failed to delete company')
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] })
+      toast.success('Company deleted')
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
     },
   })
 
@@ -256,7 +244,7 @@ function CompaniesComponent() {
             {isLoading ? (
               <div className="p-8 text-center text-choco-500">Loading companies...</div>
             ) : isError ? (
-              <div className="p-8 text-center text-red-500">Failed to load companies.</div>
+              <div className="p-8 text-center text-red-500">Could not load companies. The server may be temporarily unavailable.</div>
             ) : !companies || companies.length === 0 ? (
               <div className="p-8 text-center text-choco-400">No companies added yet. Start by adding one.</div>
             ) : filteredCompanies.length === 0 ? (
