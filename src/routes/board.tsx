@@ -47,6 +47,7 @@ function KanbanBoardComponent() {
   const [isAddAppOpen, setIsAddAppOpen] = useState(false)
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null)
   const [activeMobileStage, setActiveMobileStage] = useState<StageType>('WISHLIST')
+  const [searchQuery, setSearchQuery] = useState('')
   
   // New application form state
   const [newCompanyId, setNewCompanyId] = useState('')
@@ -237,6 +238,17 @@ function KanbanBoardComponent() {
     return days >= 14
   }
 
+  // Filtered applications by search query
+  const filteredApplications = applications?.filter((app) => {
+    const query = searchQuery.toLowerCase().trim()
+    if (!query) return true
+    return (
+      app.company.name.toLowerCase().includes(query) ||
+      app.jobTitle.toLowerCase().includes(query) ||
+      (app.source && app.source.toLowerCase().includes(query))
+    )
+  }) || []
+
   return (
     <div className="h-full flex flex-col space-y-4 md:space-y-6">
       {/* Board Header */}
@@ -253,6 +265,27 @@ function KanbanBoardComponent() {
         </button>
       </div>
 
+      {/* Search and Filters */}
+      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-choco-100/60 shadow-xs">
+        <div className="flex-1">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search applications by company, title, or source..."
+            className="w-full px-4 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500 transition-all duration-200"
+          />
+        </div>
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="px-4 py-2 text-xs font-bold text-choco-700 bg-cream-100 hover:bg-cream-200 rounded-lg transition-colors cursor-pointer"
+          >
+            Clear Search
+          </button>
+        )}
+      </div>
+
       {/* Mobile Stage Selector Dropdown (visible only on mobile) */}
       <div className="md:hidden">
         <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
@@ -264,7 +297,7 @@ function KanbanBoardComponent() {
           className="w-full px-3 py-2.5 border border-choco-200 bg-white rounded-lg text-sm text-choco-950 font-serif font-bold focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500"
         >
           {STAGES.map((s) => {
-            const stageApps = applications?.filter((app) => app.stage === s) || []
+            const stageApps = filteredApplications.filter((app) => app.stage === s)
             return (
               <option key={s} value={s}>
                 {s} ({stageApps.length} applications)
@@ -282,7 +315,7 @@ function KanbanBoardComponent() {
       ) : (
         <div className="flex-1 overflow-x-auto flex gap-6 pb-6 items-start h-[calc(100vh-230px)] md:h-[calc(100vh-190px)] min-h-[400px]">
           {STAGES.map((stage) => {
-            const stageApps = applications?.filter((app) => app.stage === stage) || []
+            const stageApps = filteredApplications.filter((app) => app.stage === stage)
             const isVisible = activeMobileStage === stage
             return (
               <div
@@ -531,7 +564,7 @@ function KanbanBoardComponent() {
                           <div className="flex items-center gap-2">
                             <span className={`text-xxs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                               note.type === 'INTERVIEW'
-                                ? 'bg-indigo-50 text-indigo-855'
+                                ? 'bg-indigo-55 bg-indigo-50 text-indigo-855'
                                 : note.type === 'ASSESSMENT'
                                 ? 'bg-amber-50 text-amber-850 border border-amber-100'
                                 : note.type === 'FEEDBACK'

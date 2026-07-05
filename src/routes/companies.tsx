@@ -26,6 +26,9 @@ function CompaniesComponent() {
   const [url, setUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
   
+  // Search query state
+  const [searchQuery, setSearchQuery] = useState('')
+
   // Edit mode state
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
@@ -147,6 +150,17 @@ function CompaniesComponent() {
     })
   }
 
+  // Filtered companies list
+  const filteredCompanies = companies?.filter((c) => {
+    const query = searchQuery.toLowerCase().trim()
+    if (!query) return true
+    return (
+      c.name.toLowerCase().includes(query) ||
+      (c.industry && c.industry.toLowerCase().includes(query)) ||
+      (c.location && c.location.toLowerCase().includes(query))
+    )
+  }) || []
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Header and Summary */}
@@ -227,6 +241,17 @@ function CompaniesComponent() {
 
         {/* Companies List */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Search Input */}
+          <div className="bg-white p-4 rounded-xl border border-choco-100/60 shadow-xs">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search companies by name, industry, or location..."
+              className="w-full px-4 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500 transition-all duration-200"
+            />
+          </div>
+
           <div className="bg-white rounded-xl border border-choco-100 shadow-sm overflow-hidden">
             {isLoading ? (
               <div className="p-8 text-center text-choco-500">Loading companies...</div>
@@ -234,6 +259,8 @@ function CompaniesComponent() {
               <div className="p-8 text-center text-red-500">Failed to load companies.</div>
             ) : !companies || companies.length === 0 ? (
               <div className="p-8 text-center text-choco-400">No companies added yet. Start by adding one.</div>
+            ) : filteredCompanies.length === 0 ? (
+              <div className="p-8 text-center text-choco-400">No companies match your search.</div>
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -244,7 +271,7 @@ function CompaniesComponent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-choco-50">
-                  {companies.map((company) => (
+                  {filteredCompanies.map((company) => (
                     <tr key={company.id} className="hover:bg-cream-50/30 transition-colors text-sm">
                       <td className="px-6 py-4">
                         {editingId === company.id ? (
