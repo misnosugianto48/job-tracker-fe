@@ -1,75 +1,57 @@
-# React + TypeScript + Vite
+# Job Tracker Frontend App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React client application for the Job Application Tracker CMS. Designed with a premium **Cream & Chocolate editorial/magazine aesthetic** and fully optimized for mobile devices.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🎨 Theme & Typography
+*   **Color Palette**:
+    *   **Cream**: Warm, rich beige base background colors for a clean editorial look.
+    *   **Chocolate**: High-contrast deep brown accents for premium headers, cards, and borders.
+*   **Typography**:
+    *   **Playfair Display**: Elegant serif font used for main title headings, summaries, and dashboard stats.
+    *   **Inter**: Clean, legible sans-serif font for table rows, navigation items, and body descriptions.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 📱 Mobile UX Optimizations
+*   **Thumb-friendly Navigation**: Integrated slide-out navigation drawer toggled by a header hamburger menu on mobile screens.
+*   **Pipeline Stage Selector**: Replaced horizontal scroll tabs with a clear, high-contrast dropdown selector showing total applications per stage.
+*   **Quick Card Movements**: Added inline "Move Status" dropdown selectors to each Kanban card, allowing mobile users to change stages instantly without struggling with touch drag-and-drop.
+*   **Application Details Panel**: Side-panel responsive slide-out to read logs, timeline events, and manage notes.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🛠️ Tech Stack & Routes
+*   **Framework**: React & Vite
+*   **Routing**: TanStack Router (type-safe routing structure)
+*   **State & Sync**: TanStack Query (real-time query caching and mutations)
+*   **Icons**: Lucide React
+*   **Styling**: Vanilla CSS (Tailwind CSS utilized for flexible helper layout utilities)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🚀 Local Installation & Run
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+### Step 1: Install Dependencies
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+### Step 2: Start Development Server
+```bash
+npm run dev
 ```
+*The dev server will start (typically on `http://localhost:5173`). By default, it communicates with the API at `http://localhost:5000`.*
+
+---
+
+## 🐳 Docker Containerization
+This frontend contains a multi-stage `Dockerfile` and a custom Nginx configuration (`nginx.conf`).
+*   **Stage 1**: Compiles Vite static production assets.
+*   **Stage 2**: Serves assets using `nginx:alpine` and proxies all `/api` requests to the `backend` container.
+*   To test the containerized frontend locally:
+    ```bash
+    docker build -t job-tracker-frontend .
+    docker run -p 80:80 job-tracker-frontend
+    ```
