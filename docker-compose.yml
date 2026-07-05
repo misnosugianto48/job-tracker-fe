@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   frontend:
     build:
@@ -8,4 +6,4 @@ services:
     container_name: job_tracker_frontend
     restart: always
     ports:
-      - "80:80"
+      - "127.0.0.1:3000:80"
