@@ -36,7 +36,7 @@ export const Route = createFileRoute('/board')({
   component: KanbanBoardComponent,
 })
 
-const API_BASE = 'http://localhost:5000/api'
+import { API_BASE } from '../lib/api'
 const STAGES = ['WISHLIST', 'APPLIED', 'ASSESSMENT', 'INTERVIEW', 'OFFERED', 'REJECTED'] as const
 type StageType = typeof STAGES[number]
 

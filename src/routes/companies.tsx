@@ -16,7 +16,7 @@ export const Route = createFileRoute('/companies')({
   component: CompaniesComponent,
 })
 
-const API_BASE = 'http://localhost:5000/api'
+import { API_BASE } from '../lib/api'
 
 function CompaniesComponent() {
   const queryClient = useQueryClient()
