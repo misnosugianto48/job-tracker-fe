@@ -46,6 +46,7 @@ function KanbanBoardComponent() {
   // State for modals and panels
   const [isAddAppOpen, setIsAddAppOpen] = useState(false)
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null)
+  const [activeMobileStage, setActiveMobileStage] = useState<StageType>('WISHLIST')
   
   // New application form state
   const [newCompanyId, setNewCompanyId] = useState('')
@@ -237,19 +238,40 @@ function KanbanBoardComponent() {
   }
 
   return (
-    <div className="h-full flex flex-col space-y-6">
+    <div className="h-full flex flex-col space-y-4 md:space-y-6">
       {/* Board Header */}
-      <div className="flex justify-between items-center border-b border-choco-200 pb-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b border-choco-200 pb-4">
         <div>
-          <h2 className="text-3xl font-serif font-extrabold text-choco-900 tracking-tight">Application Pipeline</h2>
-          <p className="text-choco-600 mt-1">Drag and drop cards to progress stage status.</p>
+          <h2 className="text-2xl md:text-3xl font-serif font-extrabold text-choco-900 tracking-tight">Application Pipeline</h2>
+          <p className="text-choco-600 mt-1 text-xs md:text-sm">Progress applications by stage status.</p>
         </div>
         <button
           onClick={() => setIsAddAppOpen(true)}
-          className="bg-choco-800 hover:bg-choco-750 text-cream-50 font-bold text-sm px-4.5 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+          className="bg-choco-800 hover:bg-choco-750 text-cream-50 font-bold text-xs md:text-sm px-4.5 py-2.5 rounded-lg flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer w-full sm:w-auto"
         >
           <Plus size={16} /> New Application
         </button>
+      </div>
+
+      {/* Mobile Stage Switcher Tabs (hidden on md/desktop) */}
+      <div className="md:hidden flex gap-2 pb-2 overflow-x-auto border-b border-choco-100/50 scrollbar-none">
+        {STAGES.map((s) => {
+          const isActive = activeMobileStage === s
+          const stageApps = applications?.filter((app) => app.stage === s) || []
+          return (
+            <button
+              key={s}
+              onClick={() => setActiveMobileStage(s)}
+              className={`flex-shrink-0 px-3.5 py-1.5 text-xxs font-serif font-bold uppercase rounded-lg border transition-all ${
+                isActive 
+                  ? 'bg-choco-800 text-cream-50 border-choco-800' 
+                  : 'bg-white text-choco-600 border-choco-100'
+              }`}
+            >
+              {s} ({stageApps.length})
+            </button>
+          )
+        })}
       </div>
 
       {/* Board Layout */}
@@ -258,15 +280,18 @@ function KanbanBoardComponent() {
           Loading kanban pipeline...
         </div>
       ) : (
-        <div className="flex-1 overflow-x-auto flex gap-6 pb-6 items-start h-[calc(100vh-190px)] min-h-[500px]">
+        <div className="flex-1 overflow-x-auto flex gap-6 pb-6 items-start h-[calc(100vh-230px)] md:h-[calc(100vh-190px)] min-h-[400px]">
           {STAGES.map((stage) => {
             const stageApps = applications?.filter((app) => app.stage === stage) || []
+            const isVisible = activeMobileStage === stage
             return (
               <div
                 key={stage}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, stage)}
-                className="w-80 flex-shrink-0 bg-cream-100/60 rounded-xl border border-choco-100/80 flex flex-col max-h-full"
+                className={`w-full md:w-80 flex-shrink-0 bg-cream-100/60 rounded-xl border border-choco-100/80 flex flex-col max-h-full ${
+                  isVisible ? 'flex' : 'hidden md:flex'
+                }`}
               >
                 {/* Column Header */}
                 <div className="p-4 border-b border-choco-100 flex justify-between items-center bg-cream-100 rounded-t-xl">
@@ -334,7 +359,7 @@ function KanbanBoardComponent() {
       {/* Side Panel: Application Detail / Timeline */}
       {selectedAppId && (
         <div className="fixed inset-0 bg-choco-950/45 backdrop-blur-xs flex justify-end z-50 transition-opacity">
-          <div className="w-[520px] bg-white h-full shadow-2xl flex flex-col animate-slide-in relative border-l border-choco-100">
+          <div className="w-full sm:w-[520px] bg-white h-full shadow-2xl flex flex-col animate-slide-in relative border-l border-choco-100">
             <button
               onClick={() => setSelectedAppId(null)}
               className="absolute top-6 right-6 text-choco-400 hover:text-choco-700 transition-colors cursor-pointer"
@@ -343,13 +368,13 @@ function KanbanBoardComponent() {
             </button>
 
             {selectedApplication ? (
-              <div className="flex flex-col h-full overflow-hidden p-8 space-y-6">
+              <div className="flex flex-col h-full overflow-hidden p-6 sm:p-8 space-y-6">
                 {/* Panel Header */}
                 <div className="border-b border-choco-100 pb-5 space-y-2">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-choco-600 uppercase tracking-widest font-serif">
                     <Building size={14} /> {selectedApplication.company.name}
                   </div>
-                  <h3 className="text-2xl font-serif font-extrabold text-choco-900 leading-tight">{selectedApplication.jobTitle}</h3>
+                  <h3 className="text-xl sm:text-2xl font-serif font-extrabold text-choco-900 leading-tight">{selectedApplication.jobTitle}</h3>
                   <div className="flex flex-wrap gap-2 text-xs">
                     <span className="bg-cream-100 text-choco-800 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider text-xxs">
                       {selectedApplication.stage}
@@ -383,7 +408,7 @@ function KanbanBoardComponent() {
                         href={selectedApplication.postingUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-choco-600 hover:text-choco-800 underline inline-flex items-center gap-1 font-bold"
+                        className="text-choco-600 hover:text-choco-800 underline inline-flex items-center gap-1 font-bold break-all"
                       >
                         View Original Posting <Link2 size={12} />
                       </a>
@@ -473,11 +498,11 @@ function KanbanBoardComponent() {
                           <div className="flex items-center gap-2">
                             <span className={`text-xxs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                               note.type === 'INTERVIEW'
-                                ? 'bg-indigo-50 text-indigo-855'
+                                ? 'bg-indigo-55 bg-indigo-50 text-indigo-855'
                                 : note.type === 'ASSESSMENT'
                                 ? 'bg-amber-50 text-amber-850 border border-amber-100'
                                 : note.type === 'FEEDBACK'
-                                ? 'bg-emerald-50 text-emerald-850'
+                                ? 'bg-emerald-50 text-emerald-855'
                                 : 'bg-cream-100 text-choco-800'
                             }`}>
                               {note.type}
@@ -487,7 +512,7 @@ function KanbanBoardComponent() {
                             </span>
                           </div>
                           <h5 className="font-serif font-bold text-choco-900 text-sm mt-1">{note.title}</h5>
-                          <p className="text-xs text-choco-650 leading-relaxed font-medium">{note.content}</p>
+                          <p className="text-xs text-choco-655 leading-relaxed font-medium">{note.content}</p>
                           {note.eventDate && (
                             <div className="text-xxs font-bold text-choco-500 pt-1 flex items-center gap-0.5">
                               <Calendar size={10} />
@@ -510,7 +535,7 @@ function KanbanBoardComponent() {
       {/* Modal Dialog: Add Application */}
       {isAddAppOpen && (
         <div className="fixed inset-0 bg-choco-950/45 backdrop-blur-xs flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl border border-choco-150 shadow-2xl w-[450px] max-w-full space-y-4">
+          <div className="bg-white p-6 rounded-xl border border-choco-150 shadow-2xl w-[450px] max-w-[90%] sm:max-w-full space-y-4">
             <div className="flex justify-between items-center border-b border-choco-100 pb-3">
               <h3 className="text-lg font-serif font-bold text-choco-900">Add New Application</h3>
               <button onClick={() => setIsAddAppOpen(false)} className="text-choco-400 hover:text-choco-600 cursor-pointer">
