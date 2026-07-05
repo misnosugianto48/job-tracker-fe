@@ -243,7 +243,7 @@ function KanbanBoardComponent() {
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b border-choco-200 pb-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-serif font-extrabold text-choco-900 tracking-tight">Application Pipeline</h2>
-          <p className="text-choco-600 mt-1 text-xs md:text-sm">Progress applications by stage status.</p>
+          <p className="text-choco-600 mt-1 text-xs md:text-sm">Manage and status track application stages.</p>
         </div>
         <button
           onClick={() => setIsAddAppOpen(true)}
@@ -253,25 +253,25 @@ function KanbanBoardComponent() {
         </button>
       </div>
 
-      {/* Mobile Stage Switcher Tabs (hidden on md/desktop) */}
-      <div className="md:hidden flex gap-2 pb-2 overflow-x-auto border-b border-choco-100/50 scrollbar-none">
-        {STAGES.map((s) => {
-          const isActive = activeMobileStage === s
-          const stageApps = applications?.filter((app) => app.stage === s) || []
-          return (
-            <button
-              key={s}
-              onClick={() => setActiveMobileStage(s)}
-              className={`flex-shrink-0 px-3.5 py-1.5 text-xxs font-serif font-bold uppercase rounded-lg border transition-all ${
-                isActive 
-                  ? 'bg-choco-800 text-cream-50 border-choco-800' 
-                  : 'bg-white text-choco-600 border-choco-100'
-              }`}
-            >
-              {s} ({stageApps.length})
-            </button>
-          )
-        })}
+      {/* Mobile Stage Selector Dropdown (visible only on mobile) */}
+      <div className="md:hidden">
+        <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
+          Active Pipeline Stage:
+        </label>
+        <select
+          value={activeMobileStage}
+          onChange={(e) => setActiveMobileStage(e.target.value as StageType)}
+          className="w-full px-3 py-2.5 border border-choco-200 bg-white rounded-lg text-sm text-choco-950 font-serif font-bold focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500"
+        >
+          {STAGES.map((s) => {
+            const stageApps = applications?.filter((app) => app.stage === s) || []
+            return (
+              <option key={s} value={s}>
+                {s} ({stageApps.length} applications)
+              </option>
+            )
+          })}
+        </select>
       </div>
 
       {/* Board Layout */}
@@ -346,6 +346,28 @@ function KanbanBoardComponent() {
                             Applied: {new Date(app.dateApplied).toLocaleDateString()}
                           </div>
                         )}
+
+                        {/* Mobile Quick-stage Selection Select element */}
+                        <div className="md:hidden pt-2.5 border-t border-choco-100 mt-2">
+                          <label className="block text-[9px] font-bold uppercase tracking-wider text-choco-500 mb-1">
+                            Quick Move Status:
+                          </label>
+                          <select
+                            value={app.stage}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation()
+                              updateStageMutation.mutate({ id: app.id, stage: e.target.value as StageType })
+                            }}
+                            className="w-full px-2 py-1.5 bg-cream-50/50 border border-choco-200 rounded text-xxs text-choco-900 font-bold focus:outline-none focus:border-choco-500"
+                          >
+                            {STAGES.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     ))
                   )}
@@ -375,10 +397,21 @@ function KanbanBoardComponent() {
                     <Building size={14} /> {selectedApplication.company.name}
                   </div>
                   <h3 className="text-xl sm:text-2xl font-serif font-extrabold text-choco-900 leading-tight">{selectedApplication.jobTitle}</h3>
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="bg-cream-100 text-choco-800 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider text-xxs">
-                      {selectedApplication.stage}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {/* Interactive Stage selector in detail panel */}
+                    <select
+                      value={selectedApplication.stage}
+                      onChange={(e) => {
+                        updateStageMutation.mutate({ id: selectedApplication.id, stage: e.target.value as StageType })
+                      }}
+                      className="bg-cream-100 text-choco-900 px-2.5 py-1 border border-choco-200 rounded font-bold uppercase tracking-wider text-xxs focus:outline-none focus:border-choco-500 cursor-pointer"
+                    >
+                      {STAGES.map((s) => (
+                        <option key={s} value={s}>
+                          STAGE: {s}
+                        </option>
+                      ))}
+                    </select>
                     {selectedApplication.source && (
                       <span className="bg-cream-50 text-choco-600 px-2 py-0.5 rounded font-medium text-xxs">
                         Source: {selectedApplication.source}
@@ -424,7 +457,7 @@ function KanbanBoardComponent() {
                         deleteAppMutation.mutate(selectedApplication.id)
                       }
                     }}
-                    className="text-red-750 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    className="text-red-755 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
                   >
                     <Trash2 size={14} /> Delete Application
                   </button>
@@ -498,7 +531,7 @@ function KanbanBoardComponent() {
                           <div className="flex items-center gap-2">
                             <span className={`text-xxs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                               note.type === 'INTERVIEW'
-                                ? 'bg-indigo-55 bg-indigo-50 text-indigo-855'
+                                ? 'bg-indigo-50 text-indigo-855'
                                 : note.type === 'ASSESSMENT'
                                 ? 'bg-amber-50 text-amber-850 border border-amber-100'
                                 : note.type === 'FEEDBACK'
