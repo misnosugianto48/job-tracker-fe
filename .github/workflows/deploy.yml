@@ -32,8 +32,17 @@ jobs:
 
       - name: Build and start frontend container
         run: |
-          ssh -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }} "
-            cd ${{ secrets.VPS_TARGET_DIR }}/frontend &&
-            docker compose up --build -d &&
+          ssh -p ${{ secrets.VPS_PORT }} ${{ secrets.VPS_USER }}@${{ secrets.VPS_IP }} << 'EOF'
+            set -e
+            cd ${{ secrets.VPS_TARGET_DIR }}/frontend
+            
+            # Inject VITE_API_URL sebelum build agar terbake ke bundle
+            echo "VITE_API_URL=https://api-jobtrack.devmisno.web.id/api" > .env
+            
+            docker compose up --build -d
             docker image prune -f
-          "
+            
+            # Verifikasi URL yang terbake
+            echo "===== Verifying baked API URL ====="
+            docker compose exec -T frontend grep -r "api-jobtrack.devmisno.web.id" /usr/share/nginx/html/assets/ || echo "⚠️ API URL not found in bundle!"
+          EOF
