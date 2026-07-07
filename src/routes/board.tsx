@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { Plus, Calendar, Trash2, Link2, DollarSign, Building, AlertCircle, X } from 'lucide-react'
+import { z } from 'zod'
 
 interface Company {
   id: number
@@ -18,6 +19,15 @@ interface Note {
   createdAt: string
 }
 
+interface Todo {
+  id: number
+  applicationId: number
+  title: string
+  completed: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface Application {
   id: number
   companyId: number
@@ -28,7 +38,9 @@ interface Application {
   postingUrl: string | null
   expectedSalary: number | null
   stage: 'WISHLIST' | 'APPLIED' | 'ASSESSMENT' | 'INTERVIEW' | 'OFFERED' | 'REJECTED'
+  resumeVersion: string | null
   notes?: Note[]
+  todos?: Todo[]
   createdAt: string
   updatedAt: string
 }
@@ -58,6 +70,10 @@ function KanbanBoardComponent() {
   const [newPostingUrl, setNewPostingUrl] = useState('')
   const [newExpectedSalary, setNewExpectedSalary] = useState('')
   const [newStage, setNewStage] = useState<StageType>('WISHLIST')
+  const [newResumeVersion, setNewResumeVersion] = useState('')
+
+  // Todo title state
+  const [newTodoTitle, setNewTodoTitle] = useState('')
 
   // New Note form state
   const [noteTitle, setNoteTitle] = useState('')
@@ -90,18 +106,70 @@ function KanbanBoardComponent() {
   })
 
   // Mutations
-  const updateStageMutation = useMutation({
-    mutationFn: async ({ id, stage }: { id: number; stage: StageType }) => {
+  const updateApplicationMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: { id: number } & Partial<Application>) => {
       return apiFetch(`${API_BASE}/applications/${id}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage }),
+        body: JSON.stringify(updates),
+      })
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+      queryClient.invalidateQueries({ queryKey: ['applications', variables.id] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Application updated')
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
+    },
+  })
+
+  const createTodoMutation = useMutation({
+    mutationFn: async ({ appId, title }: { appId: number; title: string }) => {
+      return apiFetch(`${API_BASE}/applications/${appId}/todos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
       })
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications', selectedAppId] })
       queryClient.invalidateQueries({ queryKey: ['applications'] })
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success('Stage updated')
+      toast.success('Task added')
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
+    },
+  })
+
+  const updateTodoMutation = useMutation({
+    mutationFn: async ({ id, completed, title }: { id: number; completed?: boolean; title?: string }) => {
+      return apiFetch(`${API_BASE}/todos/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed, title }),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications', selectedAppId] })
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
+    },
+  })
+
+  const deleteTodoMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiFetch(`${API_BASE}/todos/${id}`, {
+        method: 'DELETE',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications', selectedAppId] })
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+      toast.success('Task deleted')
     },
     onError: (err) => {
       toast.error(friendlyError(err))
@@ -129,6 +197,7 @@ function KanbanBoardComponent() {
       setNewPostingUrl('')
       setNewExpectedSalary('')
       setNewStage('WISHLIST')
+      setNewResumeVersion('')
     },
     onError: (err) => {
       toast.error(friendlyError(err))
@@ -203,16 +272,31 @@ function KanbanBoardComponent() {
     e.preventDefault()
     const id = parseInt(e.dataTransfer.getData('text/plain'), 10)
     if (!isNaN(id)) {
-      updateStageMutation.mutate({ id, stage: targetStage })
+      updateApplicationMutation.mutate({ id, stage: targetStage })
     }
   }
+
+  // Zod form validation schema
+  const applicationFormSchema = z.object({
+    companyId: z.number().int('Please select a company'),
+    jobTitle: z.string().trim().min(1, 'Job title is required'),
+    dateApplied: z.string().nullable().optional(),
+    source: z.string().trim().nullable().optional(),
+    postingUrl: z.string().trim().url('Job posting must be a valid URL').or(z.literal('')).nullable().optional(),
+    expectedSalary: z.number().int().nonnegative().nullable().optional(),
+    stage: z.enum(['WISHLIST', 'APPLIED', 'ASSESSMENT', 'INTERVIEW', 'OFFERED', 'REJECTED']),
+    resumeVersion: z.string().trim().nullable().optional(),
+  })
 
   // Handle application submit
   const handleCreateAppSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newCompanyId || !newJobTitle.trim()) return
+    if (!newCompanyId) {
+      toast.error('Please select a target company')
+      return
+    }
 
-    createAppMutation.mutate({
+    const rawData = {
       companyId: parseInt(newCompanyId, 10),
       jobTitle: newJobTitle.trim(),
       dateApplied: newDateApplied || null,
@@ -220,7 +304,16 @@ function KanbanBoardComponent() {
       postingUrl: newPostingUrl.trim() || null,
       expectedSalary: newExpectedSalary ? parseInt(newExpectedSalary, 10) : null,
       stage: newStage,
-    })
+      resumeVersion: newResumeVersion.trim() || null,
+    }
+
+    const validation = applicationFormSchema.safeParse(rawData)
+    if (!validation.success) {
+      toast.error(validation.error.issues[0].message)
+      return
+    }
+
+    createAppMutation.mutate(validation.data)
   }
 
   // Handle note submit
@@ -372,6 +465,11 @@ function KanbanBoardComponent() {
                               {app.source}
                             </span>
                           )}
+                          {app.resumeVersion && (
+                            <span className="text-xxs font-semibold bg-choco-55 bg-choco-50 text-choco-700 border border-choco-100 px-2 py-0.5 rounded">
+                              CV: {app.resumeVersion}
+                            </span>
+                          )}
                           {app.expectedSalary && (
                             <span className="text-xxs font-bold bg-emerald-50 text-emerald-800 border border-emerald-100 px-2 py-0.5 rounded flex items-center">
                               <DollarSign size={10} />
@@ -397,7 +495,7 @@ function KanbanBoardComponent() {
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => {
                               e.stopPropagation()
-                              updateStageMutation.mutate({ id: app.id, stage: e.target.value as StageType })
+                              updateApplicationMutation.mutate({ id: app.id, stage: e.target.value as StageType })
                             }}
                             className="w-full px-2 py-1.5 bg-cream-50/50 border border-choco-200 rounded text-xxs text-choco-900 font-bold focus:outline-none focus:border-choco-500"
                           >
@@ -442,7 +540,7 @@ function KanbanBoardComponent() {
                     <select
                       value={selectedApplication.stage}
                       onChange={(e) => {
-                        updateStageMutation.mutate({ id: selectedApplication.id, stage: e.target.value as StageType })
+                        updateApplicationMutation.mutate({ id: selectedApplication.id, stage: e.target.value as StageType })
                       }}
                       className="bg-cream-100 text-choco-900 px-2.5 py-1 border border-choco-200 rounded font-bold uppercase tracking-wider text-xxs focus:outline-none focus:border-choco-500 cursor-pointer"
                     >
@@ -474,6 +572,31 @@ function KanbanBoardComponent() {
                       <span className="font-semibold text-choco-800">${selectedApplication.expectedSalary.toLocaleString()}</span>
                     </div>
                   )}
+                  <div>
+                    <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Resume/CV Version</span>
+                    <input
+                      type="text"
+                      key={selectedApplication.id}
+                      defaultValue={selectedApplication.resumeVersion || ''}
+                      placeholder="e.g. v1.0-swe"
+                      onBlur={(e) => {
+                        const val = e.target.value.trim()
+                        if (val !== (selectedApplication.resumeVersion || '')) {
+                          updateApplicationMutation.mutate({ id: selectedApplication.id, resumeVersion: val || null })
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = (e.target as HTMLInputElement).value.trim()
+                          if (val !== (selectedApplication.resumeVersion || '')) {
+                            updateApplicationMutation.mutate({ id: selectedApplication.id, resumeVersion: val || null })
+                            ;(e.target as HTMLInputElement).blur()
+                          }
+                        }
+                      }}
+                      className="mt-0.5 w-full bg-transparent font-semibold text-choco-800 border-b border-transparent hover:border-choco-300 focus:border-choco-500 focus:outline-none py-0.5 transition-colors"
+                    />
+                  </div>
                   {selectedApplication.postingUrl && (
                     <div className="col-span-2 border-t border-choco-100/40 pt-2 mt-1">
                       <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Job Posting</span>
@@ -501,6 +624,72 @@ function KanbanBoardComponent() {
                   >
                     <Trash2 size={14} /> Delete Application
                   </button>
+                </div>
+
+                {/* Checklist / Todos Section */}
+                <div className="border-t border-choco-100 pt-4 flex flex-col space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-serif font-bold text-choco-900 text-sm">Task Checklist</h4>
+                    {selectedApplication.todos && selectedApplication.todos.length > 0 && (
+                      <span className="text-xxs font-bold text-choco-500">
+                        {selectedApplication.todos.filter((t) => t.completed).length}/{selectedApplication.todos.length} Done
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Add Todo Input */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      if (!newTodoTitle.trim()) return
+                      createTodoMutation.mutate({ appId: selectedApplication.id, title: newTodoTitle.trim() })
+                      setNewTodoTitle('')
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="text"
+                      value={newTodoTitle}
+                      onChange={(e) => setNewTodoTitle(e.target.value)}
+                      placeholder="Add task (e.g. follow up with recruiter)..."
+                      className="flex-1 px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none focus:border-choco-500"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-choco-800 hover:bg-choco-750 text-cream-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </form>
+
+                  {/* Todo List */}
+                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                    {!selectedApplication.todos || selectedApplication.todos.length === 0 ? (
+                      <p className="text-xxs text-choco-400 italic">No checklist items yet.</p>
+                    ) : (
+                      selectedApplication.todos.map((todo) => (
+                        <div key={todo.id} className="flex items-center justify-between p-2 bg-cream-50/40 border border-choco-100/50 rounded-lg group">
+                          <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={todo.completed}
+                              onChange={(e) => updateTodoMutation.mutate({ id: todo.id, completed: e.target.checked })}
+                              className="rounded border-choco-300 text-choco-600 focus:ring-choco-500 h-3.5 w-3.5 accent-choco-700"
+                            />
+                            <span className={`text-xs truncate ${todo.completed ? 'line-through text-choco-400 font-normal' : 'text-choco-800 font-medium'}`}>
+                              {todo.title}
+                            </span>
+                          </label>
+                          <button
+                            onClick={() => deleteTodoMutation.mutate(todo.id)}
+                            className="text-choco-300 hover:text-red-655 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
 
                 {/* Notes/Timeline Section */}
@@ -714,17 +903,31 @@ function KanbanBoardComponent() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-choco-500 mb-1">
-                  Job Posting URL
-                </label>
-                <input
-                  type="url"
-                  value={newPostingUrl}
-                  onChange={(e) => setNewPostingUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-choco-500 mb-1">
+                    Job Posting URL
+                  </label>
+                  <input
+                    type="url"
+                    value={newPostingUrl}
+                    onChange={(e) => setNewPostingUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-choco-500 mb-1">
+                    Resume/CV Version
+                  </label>
+                  <input
+                    type="text"
+                    value={newResumeVersion}
+                    onChange={(e) => setNewResumeVersion(e.target.value)}
+                    placeholder="e.g. v1.0-swe"
+                    className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 border-t border-choco-100 pt-3 mt-2">
