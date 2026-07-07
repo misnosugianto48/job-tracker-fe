@@ -1,3 +1,10 @@
+/**
+ * 📚 LEARNER'S NOTE:
+ * This component renders the main Kanban board pipeline for job applications.
+ * It manages application states, drag-and-drop progression, inline editing of resume versions,
+ * task checklists, and uses Zod schemas to validate data inputs before API submission.
+ */
+
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
