@@ -1,7 +1,7 @@
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, Briefcase } from 'lucide-react'
 
 interface MyRouterContext {
   queryClient: QueryClient
@@ -27,13 +27,14 @@ function RootComponent() {
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 w-64 bg-choco-900 text-cream-100 flex flex-col justify-between border-r border-choco-800 z-50 transform transition-transform duration-300 md:translate-x-0 md:static md:z-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6">
-          <div className="flex items-center justify-between gap-3 mb-10 border-b border-choco-800 pb-6">
+          <div className="flex items-center gap-2 mb-10 border-b border-choco-800 pb-6">
+            <Briefcase size={22} className="text-cream-200" />
             <span className="text-xl font-serif font-extrabold tracking-widest text-cream-200">
               TRACKER.CMS
             </span>
             <button 
               onClick={() => setIsSidebarOpen(false)}
-              className="text-choco-300 hover:text-cream-50 md:hidden p-1 rounded-md focus:outline-none"
+              className="text-choco-300 hover:text-cream-50 md:hidden p-1 rounded-md focus:outline-none ml-auto"
             >
               <X size={20} />
             </button>
@@ -84,7 +85,7 @@ function RootComponent() {
             >
               <Menu size={24} />
             </button>
-            <h1 className="text-lg md:text-xl font-serif font-bold text-choco-800 italic">Job Search Editorial</h1>
+            <h1 className="text-lg md:text-xl font-serif font-bold text-choco-800 italic">Career Journal CMS</h1>
           </div>
         </header>
 

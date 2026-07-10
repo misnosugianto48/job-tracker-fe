@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
+import { Plus, Mail, Phone, Link2, X, ExternalLink } from 'lucide-react'
 
 interface Company {
   id: number
@@ -9,6 +10,19 @@ interface Company {
   industry: string | null
   location: string | null
   url: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface Contact {
+  id: number
+  companyId: number
+  name: string
+  role: string | null
+  email: string | null
+  phone: string | null
+  linkedInUrl: string | null
+  notes: string | null
   createdAt: string
   updatedAt: string
 }
@@ -100,6 +114,95 @@ function CompaniesComponent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] })
       toast.success('Company deleted')
+    },
+    onError: (err) => {
+      toast.error(friendlyError(err))
+    },
+  })
+
+  // Contact state
+  const [selectedCompanyForContacts, setSelectedCompanyForContacts] = useState<Company | null>(null)
+  const [isAddingContact, setIsAddingContact] = useState(false)
+  const [newContactName, setNewContactName] = useState('')
+  const [newContactRole, setNewContactRole] = useState('')
+  const [newContactEmail, setNewContactEmail] = useState('')
+  const [newContactPhone, setNewContactPhone] = useState('')
+  const [newContactLinkedIn, setNewContactLinkedIn] = useState('')
+  const [newContactNotes, setNewContactNotes] = useState('')
+
+  const [editingContactId, setEditingContactId] = useState<number | null>(null)
+  const [editContactName, setEditContactName] = useState('')
+  const [editContactRole, setEditContactRole] = useState('')
+  const [editContactEmail, setEditContactEmail] = useState('')
+  const [editContactPhone, setEditContactPhone] = useState('')
+  const [editContactLinkedIn, setEditContactLinkedIn] = useState('')
+  const [editContactNotes, setEditContactNotes] = useState('')
+
+  // Query to get contacts for a company
+  const { data: contacts, isLoading: isLoadingContacts } = useQuery<Contact[]>({
+    queryKey: ['contacts', selectedCompanyForContacts?.id],
+    queryFn: async () => {
+      if (!selectedCompanyForContacts) return []
+      return apiFetch<Contact[]>(`${API_BASE}/companies/${selectedCompanyForContacts.id}/contacts`)
+    },
+    enabled: selectedCompanyForContacts !== null,
+  })
+
+  // Mutation to create a contact
+  const createContactMutation = useMutation({
+    mutationFn: async (newContact: Omit<Contact, 'id' | 'companyId' | 'createdAt' | 'updatedAt'>) => {
+      if (!selectedCompanyForContacts) return
+      return apiFetch<Contact>(`${API_BASE}/companies/${selectedCompanyForContacts.id}/contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newContact),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', selectedCompanyForContacts?.id] })
+      toast.success('Contact added')
+      setNewContactName('')
+      setNewContactRole('')
+      setNewContactEmail('')
+      setNewContactPhone('')
+      setNewContactLinkedIn('')
+      setNewContactNotes('')
+      setIsAddingContact(false)
+    },
+    onError: (err: any) => {
+      toast.error(friendlyError(err))
+    },
+  })
+
+  // Mutation to update a contact
+  const updateContactMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Omit<Contact, 'id' | 'companyId' | 'createdAt' | 'updatedAt'>> }) => {
+      return apiFetch<Contact>(`${API_BASE}/contacts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', selectedCompanyForContacts?.id] })
+      toast.success('Contact updated')
+      setEditingContactId(null)
+    },
+    onError: (err: any) => {
+      toast.error(friendlyError(err))
+    },
+  })
+
+  // Mutation to delete a contact
+  const deleteContactMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiFetch(`${API_BASE}/contacts/${id}`, {
+        method: 'DELETE',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', selectedCompanyForContacts?.id] })
+      toast.success('Contact deleted')
     },
     onError: (err) => {
       toast.error(friendlyError(err))
@@ -336,8 +439,14 @@ function CompaniesComponent() {
                         ) : (
                           <div className="flex justify-end gap-3 text-choco-400">
                             <button
+                              onClick={() => setSelectedCompanyForContacts(company)}
+                              className="hover:text-choco-750 font-semibold text-xs transition-colors underline cursor-pointer"
+                            >
+                              Contacts
+                            </button>
+                            <button
                               onClick={() => handleStartEdit(company)}
-                              className="hover:text-choco-700 font-semibold text-xs transition-colors"
+                              className="hover:text-choco-700 font-semibold text-xs transition-colors cursor-pointer"
                             >
                               Edit
                             </button>
@@ -347,7 +456,7 @@ function CompaniesComponent() {
                                   deleteMutation.mutate(company.id)
                                 }
                               }}
-                              className="hover:text-red-750 font-semibold text-xs transition-colors"
+                              className="hover:text-red-750 font-semibold text-xs transition-colors cursor-pointer"
                             >
                               Delete
                             </button>
@@ -362,6 +471,285 @@ function CompaniesComponent() {
           </div>
         </div>
       </div>
+
+      {/* Sliding Side Panel for Contacts */}
+      {selectedCompanyForContacts && (
+        <div className="fixed inset-0 overflow-hidden z-50">
+          <div className="absolute inset-0 overflow-hidden">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-choco-950/20 backdrop-blur-xs transition-opacity"
+              onClick={() => setSelectedCompanyForContacts(null)}
+            />
+            <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+              <div className="pointer-events-auto w-screen max-w-md animate-slide-in">
+                <div className="flex h-full flex-col overflow-y-scroll bg-cream-50 py-6 shadow-2xl border-l border-choco-100">
+                  {/* Panel Header */}
+                  <div className="px-6 border-b border-choco-150 pb-4 flex justify-between items-center">
+                    <div>
+                      <h2 className="text-xl font-serif font-bold text-choco-900">Contacts</h2>
+                      <p className="text-xs text-choco-600 mt-0.5">at {selectedCompanyForContacts.name}</p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedCompanyForContacts(null)}
+                      className="p-1 text-choco-400 hover:text-choco-800 rounded-full hover:bg-cream-100 transition-all cursor-pointer"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Panel Content */}
+                  <div className="relative flex-1 py-6 px-6 space-y-6">
+                    {/* Add Contact Trigger/Form */}
+                    {!isAddingContact ? (
+                      <button
+                        onClick={() => setIsAddingContact(true)}
+                        className="w-full py-2 border border-dashed border-choco-300 rounded-lg text-xs font-bold text-choco-700 hover:bg-cream-100 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Plus size={14} /> Add Contact Person
+                      </button>
+                    ) : (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          if (!newContactName.trim()) return
+                          createContactMutation.mutate({
+                            name: newContactName,
+                            role: newContactRole.trim() || null,
+                            email: newContactEmail.trim() || null,
+                            phone: newContactPhone.trim() || null,
+                            linkedInUrl: newContactLinkedIn.trim() || null,
+                            notes: newContactNotes.trim() || null,
+                          })
+                        }}
+                        className="bg-white p-4 rounded-xl border border-choco-100 shadow-xs space-y-3"
+                      >
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-choco-500 font-serif">New Contact</h4>
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            placeholder="Name *"
+                            value={newContactName}
+                            onChange={(e) => setNewContactName(e.target.value)}
+                            required
+                            className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Role / Title (e.g. Recruiter)"
+                            value={newContactRole}
+                            onChange={(e) => setNewContactRole(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                          />
+                          <input
+                            type="email"
+                            placeholder="Email Address"
+                            value={newContactEmail}
+                            onChange={(e) => setNewContactEmail(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Phone Number"
+                            value={newContactPhone}
+                            onChange={(e) => setNewContactPhone(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                          />
+                          <input
+                            type="url"
+                            placeholder="LinkedIn URL"
+                            value={newContactLinkedIn}
+                            onChange={(e) => setNewContactLinkedIn(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                          />
+                          <textarea
+                            placeholder="Notes"
+                            value={newContactNotes}
+                            onChange={(e) => setNewContactNotes(e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none resize-none"
+                          />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            type="submit"
+                            disabled={createContactMutation.isPending}
+                            className="px-3 py-1.5 bg-choco-800 hover:bg-choco-750 text-cream-50 text-xxs font-bold rounded-lg transition-colors cursor-pointer"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingContact(false)}
+                            className="px-3 py-1.5 bg-cream-100 hover:bg-cream-200 text-choco-750 text-xxs font-bold rounded-lg transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {/* Contacts List */}
+                    <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-250px)] pr-1">
+                      {isLoadingContacts ? (
+                        <div className="text-center py-8 text-xs text-choco-400 italic">Loading contacts...</div>
+                      ) : !contacts || contacts.length === 0 ? (
+                        <div className="text-center py-8 text-xs text-choco-400 italic">No contacts registered for this company yet.</div>
+                      ) : (
+                        contacts.map((contact) => (
+                          <div key={contact.id} className="bg-white p-4 rounded-xl border border-choco-100 shadow-xs relative hover:border-choco-200 transition-colors">
+                            {editingContactId === contact.id ? (
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault()
+                                  if (!editContactName.trim()) return
+                                  updateContactMutation.mutate({
+                                    id: contact.id,
+                                    data: {
+                                      name: editContactName,
+                                      role: editContactRole.trim() || null,
+                                      email: editContactEmail.trim() || null,
+                                      phone: editContactPhone.trim() || null,
+                                      linkedInUrl: editContactLinkedIn.trim() || null,
+                                      notes: editContactNotes.trim() || null,
+                                    }
+                                  })
+                                }}
+                                className="space-y-2.5"
+                              >
+                                <input
+                                  type="text"
+                                  value={editContactName}
+                                  onChange={(e) => setEditContactName(e.target.value)}
+                                  required
+                                  className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  value={editContactRole}
+                                  onChange={(e) => setEditContactRole(e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                                />
+                                <input
+                                  type="email"
+                                  value={editContactEmail}
+                                  onChange={(e) => setEditContactEmail(e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  value={editContactPhone}
+                                  onChange={(e) => setEditContactPhone(e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                                />
+                                <input
+                                  type="url"
+                                  value={editContactLinkedIn}
+                                  onChange={(e) => setEditContactLinkedIn(e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none"
+                                />
+                                <textarea
+                                  value={editContactNotes}
+                                  onChange={(e) => setEditContactNotes(e.target.value)}
+                                  rows={2}
+                                  className="w-full px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none resize-none"
+                                />
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    type="submit"
+                                    disabled={updateContactMutation.isPending}
+                                    className="px-2.5 py-1.25 bg-choco-800 hover:bg-choco-750 text-cream-50 text-xxs font-bold rounded transition-colors cursor-pointer"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingContactId(null)}
+                                    className="px-2.5 py-1.25 bg-cream-100 hover:bg-cream-200 text-choco-750 text-xxs font-bold rounded transition-colors cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <h4 className="font-serif font-bold text-choco-900 text-sm">{contact.name}</h4>
+                                    {contact.role && <p className="text-xxs text-choco-500 font-semibold uppercase tracking-wider">{contact.role}</p>}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setEditingContactId(contact.id)
+                                        setEditContactName(contact.name)
+                                        setEditContactRole(contact.role || '')
+                                        setEditContactEmail(contact.email || '')
+                                        setEditContactPhone(contact.phone || '')
+                                        setEditContactLinkedIn(contact.linkedInUrl || '')
+                                        setEditContactNotes(contact.notes || '')
+                                      }}
+                                      className="text-xxs text-choco-400 hover:text-choco-750 underline font-semibold transition-colors"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (confirm('Delete this contact?')) {
+                                          deleteContactMutation.mutate(contact.id)
+                                        }
+                                      }}
+                                      className="text-xxs text-choco-400 hover:text-red-750 underline font-semibold transition-colors"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="text-xs text-choco-600 space-y-1 font-medium">
+                                  {contact.email && (
+                                    <div className="flex items-center gap-1.5">
+                                      <Mail size={12} className="text-choco-400" />
+                                      <a href={`mailto:${contact.email}`} className="hover:underline text-choco-700">{contact.email}</a>
+                                    </div>
+                                  )}
+                                  {contact.phone && (
+                                    <div className="flex items-center gap-1.5">
+                                      <Phone size={12} className="text-choco-400" />
+                                      <span className="text-choco-700">{contact.phone}</span>
+                                    </div>
+                                  )}
+                                  {contact.linkedInUrl && (
+                                    <div className="flex items-center gap-1.5">
+                                      <Link2 size={12} className="text-choco-400" />
+                                      <a
+                                        href={contact.linkedInUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:underline text-choco-700 flex items-center gap-0.5"
+                                      >
+                                        LinkedIn Profile <ExternalLink size={10} />
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                                {contact.notes && (
+                                  <div className="text-xxs text-choco-600 bg-cream-50/50 p-2 rounded border border-choco-100/50 font-medium leading-relaxed mt-1">
+                                    {contact.notes}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
