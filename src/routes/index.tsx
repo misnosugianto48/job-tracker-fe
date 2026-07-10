@@ -41,6 +41,12 @@ interface DashboardData {
       name: string
     }
   }>
+  salaryAnalytics?: {
+    average: number
+    min: number
+    max: number
+    totalPipelineValue: number
+  }
 }
 
 export const Route = createFileRoute('/')({
@@ -93,9 +99,27 @@ function DashboardComponent() {
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Welcome header */}
-      <div className="border-b border-choco-200 pb-6">
-        <h2 className="text-3xl font-serif font-extrabold text-choco-900 tracking-tight">Search Overview</h2>
-        <p className="text-choco-600 mt-1">Real-time status of your active application funnel.</p>
+      <div className="border-b border-choco-200 pb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-serif font-extrabold text-choco-900 tracking-tight">Search Overview</h2>
+          <p className="text-choco-600 mt-1">Real-time status of your active application funnel.</p>
+        </div>
+        <div className="flex gap-3">
+          <a
+            href={`${API_BASE}/export?format=json`}
+            download="job_tracker_backup.json"
+            className="px-4 py-2 text-xs font-bold rounded-lg border border-choco-300 text-choco-700 bg-white hover:bg-cream-50 transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
+          >
+            Export Backup (JSON)
+          </a>
+          <a
+            href={`${API_BASE}/export?format=csv`}
+            download="job_tracker_backup.csv"
+            className="px-4 py-2 text-xs font-bold rounded-lg border border-choco-850 bg-choco-900 text-cream-100 hover:bg-choco-800 transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       {/* Analytical Metrics */}
@@ -161,6 +185,39 @@ function DashboardComponent() {
           })}
         </div>
       </div>
+
+      {/* Salary Insights Widget */}
+      {data.salaryAnalytics && (
+        <div className="bg-white p-6 rounded-xl border border-choco-100 shadow-sm space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-choco-400 font-serif">Salary Insights & Pipeline Value</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-cream-50/50 p-4 rounded-lg border border-choco-50 flex flex-col justify-between">
+              <span className="text-xs font-bold text-choco-600">Average Expected Salary</span>
+              <div className="text-2xl font-serif font-bold text-choco-900 mt-2">
+                {data.salaryAnalytics.average > 0 ? `Rp ${data.salaryAnalytics.average.toLocaleString('id-ID')}` : 'Rp 0'}
+              </div>
+            </div>
+            <div className="bg-cream-50/50 p-4 rounded-lg border border-choco-50 flex flex-col justify-between">
+              <span className="text-xs font-bold text-choco-600">Minimum Expected Salary</span>
+              <div className="text-2xl font-serif font-bold text-choco-900 mt-2">
+                {data.salaryAnalytics.min > 0 ? `Rp ${data.salaryAnalytics.min.toLocaleString('id-ID')}` : 'Rp 0'}
+              </div>
+            </div>
+            <div className="bg-cream-50/50 p-4 rounded-lg border border-choco-50 flex flex-col justify-between">
+              <span className="text-xs font-bold text-choco-600">Maximum Expected Salary</span>
+              <div className="text-2xl font-serif font-bold text-choco-900 mt-2">
+                {data.salaryAnalytics.max > 0 ? `Rp ${data.salaryAnalytics.max.toLocaleString('id-ID')}` : 'Rp 0'}
+              </div>
+            </div>
+            <div className="bg-choco-900 p-4 rounded-lg border border-choco-850 flex flex-col justify-between">
+              <span className="text-xs font-bold text-choco-300">Total Pipeline Value</span>
+              <div className="text-2xl font-serif font-bold text-cream-200 mt-2">
+                {data.salaryAnalytics.totalPipelineValue > 0 ? `Rp ${data.salaryAnalytics.totalPipelineValue.toLocaleString('id-ID')}` : 'Rp 0'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Upcoming Events Widget */}

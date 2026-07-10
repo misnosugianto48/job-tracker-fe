@@ -9,7 +9,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Calendar, Trash2, Link2, DollarSign, Building, AlertCircle, X } from 'lucide-react'
+import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X } from 'lucide-react'
 import { z } from 'zod'
 
 interface Company {
@@ -478,9 +478,8 @@ function KanbanBoardComponent() {
                             </span>
                           )}
                           {app.expectedSalary && (
-                            <span className="text-xxs font-bold bg-emerald-50 text-emerald-800 border border-emerald-100 px-2 py-0.5 rounded flex items-center">
-                              <DollarSign size={10} />
-                              {app.expectedSalary.toLocaleString()}
+                            <span className="text-xxs font-bold bg-emerald-50 text-emerald-800 border border-emerald-100 px-2 py-0.5 rounded flex items-center gap-0.5">
+                              Rp {app.expectedSalary.toLocaleString('id-ID')}
                             </span>
                           )}
                         </div>
@@ -576,7 +575,7 @@ function KanbanBoardComponent() {
                   {selectedApplication.expectedSalary && (
                     <div>
                       <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Expected Salary</span>
-                      <span className="font-semibold text-choco-800">${selectedApplication.expectedSalary.toLocaleString()}</span>
+                      <span className="font-semibold text-choco-800">Rp {selectedApplication.expectedSalary.toLocaleString('id-ID')}</span>
                     </div>
                   )}
                   <div>
@@ -886,13 +885,13 @@ function KanbanBoardComponent() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-choco-500 mb-1">
-                    Expected Salary ($)
+                    Expected Salary (Rp)
                   </label>
                   <input
                     type="number"
                     value={newExpectedSalary}
                     onChange={(e) => setNewExpectedSalary(e.target.value)}
-                    placeholder="e.g. 120000"
+                    placeholder="e.g. 15000000"
                     className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20"
                   />
                 </div>
