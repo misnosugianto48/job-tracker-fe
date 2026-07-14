@@ -51,13 +51,33 @@ function CompaniesComponent() {
   const [editLocation, setEditLocation] = useState('')
   const [editUrl, setEditUrl] = useState('')
 
-  // Query to get all companies
-  const { data: companies, isLoading, isError } = useQuery<Company[]>({
-    queryKey: ['companies'],
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 8
+
+  interface CompaniesResponse {
+    data: Company[]
+    total: number
+  }
+
+  // Query to get paginated companies from BE
+  const { data: paginatedCompanies, isLoading, isError } = useQuery<CompaniesResponse>({
+    queryKey: ['companies', searchQuery, currentPage],
     queryFn: async () => {
-      return apiFetch<Company[]>(`${API_BASE}/companies`)
+      const params = new URLSearchParams()
+      if (searchQuery) params.append('search', searchQuery)
+      params.append('page', currentPage.toString())
+      params.append('limit', itemsPerPage.toString())
+      return apiFetch<CompaniesResponse>(`${API_BASE}/companies?${params.toString()}`)
     },
   })
+
+  const currentCompanies = paginatedCompanies?.data || []
+  const totalCompanies = paginatedCompanies?.total || 0
+  const totalPages = Math.ceil(totalCompanies / itemsPerPage)
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+
 
   // Mutation to create a company
   const createMutation = useMutation({
@@ -241,16 +261,7 @@ function CompaniesComponent() {
     })
   }
 
-  // Filtered companies list
-  const filteredCompanies = companies?.filter((c) => {
-    const query = searchQuery.toLowerCase().trim()
-    if (!query) return true
-    return (
-      c.name.toLowerCase().includes(query) ||
-      (c.industry && c.industry.toLowerCase().includes(query)) ||
-      (c.location && c.location.toLowerCase().includes(query))
-    )
-  }) || []
+  // Handled paginated list from backend
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -337,136 +348,320 @@ function CompaniesComponent() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
               placeholder="Search companies by name, industry, or location..."
               className="w-full px-4 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500 transition-all duration-200"
             />
           </div>
 
-          <div className="bg-white rounded-xl border border-choco-100 shadow-sm overflow-hidden">
-            {isLoading ? (
-              <div className="p-8 text-center text-choco-500">Loading companies...</div>
-            ) : isError ? (
-              <div className="p-8 text-center text-red-500">Could not load companies. The server may be temporarily unavailable.</div>
-            ) : !companies || companies.length === 0 ? (
-              <div className="p-8 text-center text-choco-400">No companies added yet. Start by adding one.</div>
-            ) : filteredCompanies.length === 0 ? (
-              <div className="p-8 text-center text-choco-400">No companies match your search.</div>
-            ) : (
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-cream-100/50 border-b border-choco-100 text-xs font-bold uppercase tracking-wider text-choco-600 font-serif">
-                    <th className="px-6 py-4">Company</th>
-                    <th className="px-6 py-4">Details</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-choco-50">
-                  {filteredCompanies.map((company) => (
-                    <tr key={company.id} className="hover:bg-cream-50/30 transition-colors text-sm">
-                      <td className="px-6 py-4">
+          <div className="bg-white rounded-xl border border-choco-100 shadow-sm overflow-hidden flex flex-col justify-between min-h-[300px]">
+            <div>
+              {isLoading ? (
+                <div className="p-8 text-center text-choco-500">Loading companies...</div>
+              ) : isError ? (
+                <div className="p-8 text-center text-red-500">Could not load companies. The server may be temporarily unavailable.</div>
+              ) : totalCompanies === 0 ? (
+                searchQuery ? (
+                  <div className="p-8 text-center text-choco-400">No companies match your search.</div>
+                ) : (
+                  <div className="p-8 text-center text-choco-400">No companies added yet. Start by adding one.</div>
+                )
+              ) : (
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-cream-100/50 border-b border-choco-100 text-xs font-bold uppercase tracking-wider text-choco-600 font-serif">
+                          <th className="px-6 py-4">Company</th>
+                          <th className="px-6 py-4">Details</th>
+                          <th className="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-choco-50">
+                        {currentCompanies.map((company) => (
+                          <tr key={company.id} className="hover:bg-cream-50/30 transition-colors text-sm">
+                            <td className="px-6 py-4">
+                              {editingId === company.id ? (
+                                <input
+                                  type="text"
+                                  value={editName}
+                                  onChange={(e) => setEditName(e.target.value)}
+                                  className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-sm w-full focus:outline-none focus:border-choco-500"
+                                />
+                              ) : (
+                                <div className="font-serif font-bold text-choco-850 text-base">{company.name}</div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 space-y-1">
+                              {editingId === company.id ? (
+                                <div className="space-y-2">
+                                  <input
+                                    type="text"
+                                    value={editIndustry}
+                                    onChange={(e) => setEditIndustry(e.target.value)}
+                                    placeholder="Industry"
+                                    className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-xs w-full focus:outline-none"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={editLocation}
+                                    onChange={(e) => setEditLocation(e.target.value)}
+                                    placeholder="Location"
+                                    className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-xs w-full focus:outline-none"
+                                  />
+                                  <input
+                                    type="url"
+                                    value={editUrl}
+                                    onChange={(e) => setEditUrl(e.target.value)}
+                                    placeholder="Website"
+                                    className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-xs w-full focus:outline-none"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="text-xs text-choco-600 space-y-0.5 font-medium">
+                                  {company.industry && <div><span className="font-semibold text-choco-400">Industry:</span> {company.industry}</div>}
+                                  {company.location && <div><span className="font-semibold text-choco-400">Location:</span> {company.location}</div>}
+                                  {company.url && (
+                                    <div>
+                                      <a
+                                        href={company.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-choco-500 hover:text-choco-700 underline font-semibold transition-colors"
+                                      >
+                                        {company.url}
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {editingId === company.id ? (
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => handleUpdate(company.id)}
+                                    className="bg-choco-700 hover:bg-choco-650 text-cream-50 text-xs px-3 py-1.5 rounded transition-colors font-bold shadow-xs"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingId(null)}
+                                    className="bg-cream-100 hover:bg-cream-200 text-choco-750 text-xs px-3 py-1.5 rounded transition-colors font-bold"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex justify-end gap-3 text-choco-400">
+                                  <button
+                                    onClick={() => setSelectedCompanyForContacts(company)}
+                                    className="hover:text-choco-750 font-semibold text-xs transition-colors underline cursor-pointer"
+                                  >
+                                    Contacts
+                                  </button>
+                                  <button
+                                    onClick={() => handleStartEdit(company)}
+                                    className="hover:text-choco-700 font-semibold text-xs transition-colors cursor-pointer"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm('Are you sure? This will delete all linked applications.')) {
+                                        deleteMutation.mutate(company.id)
+                                      }
+                                    }}
+                                    className="hover:text-red-755 font-semibold text-xs transition-colors cursor-pointer"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card List View */}
+                  <div className="md:hidden divide-y divide-choco-50">
+                    {currentCompanies.map((company) => (
+                      <div key={company.id} className="p-4 space-y-3 hover:bg-cream-50/20 transition-colors text-left">
                         {editingId === company.id ? (
-                          <input
-                            type="text"
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-sm w-full focus:outline-none focus:border-choco-500"
-                          />
-                        ) : (
-                          <div className="font-serif font-bold text-choco-850 text-base">{company.name}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 space-y-1">
-                        {editingId === company.id ? (
-                          <div className="space-y-2">
-                            <input
-                              type="text"
-                              value={editIndustry}
-                              onChange={(e) => setEditIndustry(e.target.value)}
-                              placeholder="Industry"
-                              className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-xs w-full focus:outline-none"
-                            />
-                            <input
-                              type="text"
-                              value={editLocation}
-                              onChange={(e) => setEditLocation(e.target.value)}
-                              placeholder="Location"
-                              className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-xs w-full focus:outline-none"
-                            />
-                            <input
-                              type="url"
-                              value={editUrl}
-                              onChange={(e) => setEditUrl(e.target.value)}
-                              placeholder="Website"
-                              className="px-3 py-1.5 border border-choco-200 bg-cream-50/20 rounded text-xs w-full focus:outline-none"
-                            />
+                          <div className="space-y-3 p-1">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
+                                Company Name
+                              </label>
+                              <input
+                                type="text"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                className="w-full px-3 py-2 border border-choco-200 bg-cream-50/20 rounded-lg text-sm focus:outline-none focus:border-choco-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
+                                Industry
+                              </label>
+                              <input
+                                type="text"
+                                value={editIndustry}
+                                onChange={(e) => setEditIndustry(e.target.value)}
+                                className="w-full px-3 py-2 border border-choco-200 bg-cream-50/20 rounded-lg text-sm focus:outline-none focus:border-choco-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
+                                Location
+                              </label>
+                              <input
+                                type="text"
+                                value={editLocation}
+                                onChange={(e) => setEditLocation(e.target.value)}
+                                className="w-full px-3 py-2 border border-choco-200 bg-cream-50/20 rounded-lg text-sm focus:outline-none focus:border-choco-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
+                                Website
+                              </label>
+                              <input
+                                type="url"
+                                value={editUrl}
+                                onChange={(e) => setEditUrl(e.target.value)}
+                                className="w-full px-3 py-2 border border-choco-200 bg-cream-50/20 rounded-lg text-sm focus:outline-none focus:border-choco-500"
+                              />
+                            </div>
+                            <div className="flex gap-2 justify-end pt-2">
+                              <button
+                                onClick={() => handleUpdate(company.id)}
+                                className="bg-choco-700 hover:bg-choco-650 text-cream-50 text-xs px-3 py-1.5 rounded transition-colors font-bold shadow-xs cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="bg-cream-100 hover:bg-cream-200 text-choco-750 text-xs px-3 py-1.5 rounded transition-colors font-bold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
                         ) : (
-                          <div className="text-xs text-choco-600 space-y-0.5 font-medium">
-                            {company.industry && <div><span className="font-semibold text-choco-400">Industry:</span> {company.industry}</div>}
-                            {company.location && <div><span className="font-semibold text-choco-400">Location:</span> {company.location}</div>}
-                            {company.url && (
+                          <>
+                            <div className="flex justify-between items-start">
                               <div>
+                                <div className="font-serif font-bold text-choco-850 text-lg leading-tight">{company.name}</div>
+                                <div className="text-xs text-choco-600 mt-1.5 space-y-1 font-medium">
+                                  {company.industry && (
+                                    <div>
+                                      <span className="font-semibold text-choco-400">Industry:</span> {company.industry}
+                                    </div>
+                                  )}
+                                  {company.location && (
+                                    <div>
+                                      <span className="font-semibold text-choco-400">Location:</span> {company.location}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              {company.url && (
                                 <a
                                   href={company.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-choco-500 hover:text-choco-700 underline font-semibold transition-colors"
+                                  className="text-choco-500 hover:text-choco-700 bg-cream-100/50 p-2 rounded-lg transition-colors border border-choco-100/50"
+                                  title="Visit website"
                                 >
-                                  {company.url}
+                                  <ExternalLink size={14} />
                                 </a>
-                              </div>
-                            )}
-                          </div>
+                              )}
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2 border-t border-choco-50">
+                              <button
+                                onClick={() => setSelectedCompanyForContacts(company)}
+                                className="text-choco-750 hover:text-choco-950 font-bold text-xs bg-cream-100 px-3 py-1.5 rounded-lg border border-choco-200 transition-all cursor-pointer shadow-xs"
+                              >
+                                Contacts
+                              </button>
+                              <button
+                                onClick={() => handleStartEdit(company)}
+                                className="text-choco-700 hover:text-choco-900 font-bold text-xs bg-cream-100 px-3 py-1.5 rounded-lg border border-choco-200 transition-all cursor-pointer shadow-xs"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm('Are you sure? This will delete all linked applications.')) {
+                                    deleteMutation.mutate(company.id)
+                                  }
+                                }}
+                                className="text-red-700 hover:text-red-900 font-bold text-xs bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 transition-all cursor-pointer shadow-xs"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {editingId === company.id ? (
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleUpdate(company.id)}
-                              className="bg-choco-700 hover:bg-choco-650 text-cream-50 text-xs px-3 py-1.5 rounded transition-colors font-bold shadow-xs"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="bg-cream-100 hover:bg-cream-200 text-choco-750 text-xs px-3 py-1.5 rounded transition-colors font-bold"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex justify-end gap-3 text-choco-400">
-                            <button
-                              onClick={() => setSelectedCompanyForContacts(company)}
-                              className="hover:text-choco-750 font-semibold text-xs transition-colors underline cursor-pointer"
-                            >
-                              Contacts
-                            </button>
-                            <button
-                              onClick={() => handleStartEdit(company)}
-                              className="hover:text-choco-700 font-semibold text-xs transition-colors cursor-pointer"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm('Are you sure? This will delete all linked applications.')) {
-                                  deleteMutation.mutate(company.id)
-                                }
-                              }}
-                              className="hover:text-red-750 font-semibold text-xs transition-colors cursor-pointer"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Pagination Controls */}
+            {!isLoading && !isError && totalCompanies > 0 && totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-cream-100/30 p-4 border-t border-choco-100 text-xs">
+                <span className="text-choco-600 font-medium">
+                  Showing <span className="font-bold text-choco-800">{indexOfFirstItem + 1}</span> to{' '}
+                  <span className="font-bold text-choco-800">
+                    {Math.min(indexOfLastItem, totalCompanies)}
+                  </span>{' '}
+                  of <span className="font-bold text-choco-800">{totalCompanies}</span> companies
+                </span>
+                <div className="flex gap-2 items-center">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded bg-white border border-choco-200 text-choco-750 hover:bg-cream-100 transition-colors disabled:opacity-50 disabled:hover:bg-white font-bold cursor-pointer"
+                  >
+                    Previous
+                  </button>
+                  <div className="hidden sm:flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-7 h-7 rounded flex items-center justify-center font-bold transition-all cursor-pointer ${
+                          currentPage === page
+                            ? 'bg-choco-800 text-cream-50'
+                            : 'bg-white border border-choco-200 text-choco-750 hover:bg-cream-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="sm:hidden font-bold text-choco-750 px-2">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 rounded bg-white border border-choco-200 text-choco-750 hover:bg-cream-100 transition-colors disabled:opacity-50 disabled:hover:bg-white font-bold cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -68,6 +68,10 @@ function KanbanBoardComponent() {
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null)
   const [activeMobileStage, setActiveMobileStage] = useState<StageType>('WISHLIST')
   const [searchQuery, setSearchQuery] = useState('')
+  const [viewMode, setViewMode] = useState<'board' | 'table'>('board')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
   
   // New application form state
   const [newCompanyId, setNewCompanyId] = useState('')
@@ -96,12 +100,34 @@ function KanbanBoardComponent() {
     },
   })
 
-  const { data: applications, isLoading } = useQuery<Application[]>({
+  const { data: applications, isLoading: isLoadingBoard } = useQuery<Application[]>({
     queryKey: ['applications'],
     queryFn: async () => {
       return apiFetch<Application[]>(`${API_BASE}/applications`)
     },
+    enabled: viewMode === 'board',
   })
+
+  interface ApplicationsResponse {
+    data: Application[]
+    total: number
+  }
+
+  // Paginated applications from backend
+  const { data: paginatedApplications, isLoading: isLoadingTable } = useQuery<ApplicationsResponse>({
+    queryKey: ['applications', 'paginated', searchQuery, currentPage],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (searchQuery) params.append('search', searchQuery)
+      params.append('page', currentPage.toString())
+      params.append('limit', itemsPerPage.toString())
+      return apiFetch<ApplicationsResponse>(`${API_BASE}/applications?${params.toString()}`)
+    },
+    enabled: viewMode === 'table',
+  })
+
+  const isLoading = viewMode === 'board' ? isLoadingBoard : isLoadingTable
+
 
   // Detailed single application query (when panel is open)
   const { data: selectedApplication } = useQuery<Application>({
@@ -356,8 +382,15 @@ function KanbanBoardComponent() {
     )
   }) || []
 
+  // Pagination for table view from backend
+  const currentApplications = paginatedApplications?.data || []
+  const totalApplications = paginatedApplications?.total || 0
+  const totalPages = viewMode === 'board' ? 1 : Math.ceil(totalApplications / itemsPerPage)
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+
   return (
-    <div className="h-full flex flex-col space-y-4 md:space-y-6">
+    <div className="h-full flex flex-col space-y-4 md:space-y-6 text-left">
       {/* Board Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b border-choco-200 pb-4">
         <div>
@@ -373,53 +406,88 @@ function KanbanBoardComponent() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-choco-100/60 shadow-xs">
-        <div className="flex-1">
+      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-choco-100/60 shadow-xs justify-between items-center">
+        <div className="flex-1 w-full">
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setCurrentPage(1)
+            }}
             placeholder="Search applications by company, title, or source..."
             className="w-full px-4 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500 transition-all duration-200"
           />
         </div>
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="px-4 py-2 text-xs font-bold text-choco-700 bg-cream-100 hover:bg-cream-200 rounded-lg transition-colors cursor-pointer"
-          >
-            Clear Search
-          </button>
-        )}
+        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery('')
+                setCurrentPage(1)
+              }}
+              className="px-4 py-2 text-xs font-bold text-choco-700 bg-cream-100 hover:bg-cream-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Clear Search
+            </button>
+          )}
+
+          <div className="flex border border-choco-200 rounded-lg overflow-hidden shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode('board')}
+              className={`px-3 py-2 text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'board'
+                  ? 'bg-choco-800 text-cream-50'
+                  : 'bg-white text-choco-700 hover:bg-cream-50'
+              }`}
+            >
+              Board View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-2 text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-choco-800 text-cream-50'
+                  : 'bg-white text-choco-700 hover:bg-cream-50'
+              }`}
+            >
+              Table View
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Mobile Stage Selector Dropdown (visible only on mobile) */}
-      <div className="md:hidden">
-        <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
-          Active Pipeline Stage:
-        </label>
-        <select
-          value={activeMobileStage}
-          onChange={(e) => setActiveMobileStage(e.target.value as StageType)}
-          className="w-full px-3 py-2.5 border border-choco-200 bg-white rounded-lg text-sm text-choco-950 font-serif font-bold focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500"
-        >
-          {STAGES.map((s) => {
-            const stageApps = filteredApplications.filter((app) => app.stage === s)
-            return (
-              <option key={s} value={s}>
-                {s} ({stageApps.length} applications)
-              </option>
-            )
-          })}
-        </select>
-      </div>
+      {/* Mobile Stage Selector Dropdown (visible only on mobile and in board view) */}
+      {viewMode === 'board' && (
+        <div className="md:hidden">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-choco-500 mb-1">
+            Active Pipeline Stage:
+          </label>
+          <select
+            value={activeMobileStage}
+            onChange={(e) => setActiveMobileStage(e.target.value as StageType)}
+            className="w-full px-3 py-2.5 border border-choco-200 bg-white rounded-lg text-sm text-choco-950 font-serif font-bold focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500"
+          >
+            {STAGES.map((s) => {
+              const stageApps = filteredApplications.filter((app) => app.stage === s)
+              return (
+                <option key={s} value={s}>
+                  {s} ({stageApps.length} applications)
+                </option>
+              )
+            })}
+          </select>
+        </div>
+      )}
 
       {/* Board Layout */}
       {isLoading ? (
         <div className="p-8 text-center text-choco-500 flex-1 flex items-center justify-center font-serif italic">
-          Loading kanban pipeline...
+          Loading applications...
         </div>
-      ) : (
+      ) : viewMode === 'board' ? (
         <div className="flex-1 overflow-x-auto flex gap-6 pb-6 items-start h-[calc(100vh-230px)] md:h-[calc(100vh-190px)] min-h-[400px]">
           {STAGES.map((stage) => {
             const stageApps = filteredApplications.filter((app) => app.stage === stage)
@@ -473,7 +541,7 @@ function KanbanBoardComponent() {
                             </span>
                           )}
                           {app.resumeVersion && (
-                            <span className="text-xxs font-semibold bg-choco-55 bg-choco-50 text-choco-700 border border-choco-100 px-2 py-0.5 rounded">
+                            <span className="text-xxs font-semibold bg-choco-50 text-choco-700 border border-choco-100 px-2 py-0.5 rounded">
                               CV: {app.resumeVersion}
                             </span>
                           )}
@@ -520,27 +588,161 @@ function KanbanBoardComponent() {
             )
           })}
         </div>
+      ) : (
+        /* Paginated Table View */
+        <div className="bg-white rounded-xl border border-choco-100 shadow-sm overflow-hidden flex flex-col justify-between min-h-[400px]">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-cream-100/50 border-b border-choco-100 text-xs font-bold uppercase tracking-wider text-choco-600 font-serif">
+                  <th className="px-6 py-4">Company</th>
+                  <th className="px-6 py-4">Job Title</th>
+                  <th className="px-6 py-4">Stage</th>
+                  <th className="px-6 py-4 hidden sm:table-cell">Date Applied</th>
+                  <th className="px-6 py-4 hidden md:table-cell">CV Version</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-choco-50">
+                {currentApplications.map((app) => (
+                  <tr 
+                    key={app.id} 
+                    onClick={() => setSelectedAppId(app.id)}
+                    className="hover:bg-cream-50/40 cursor-pointer transition-colors text-sm"
+                  >
+                    <td className="px-6 py-4 font-bold text-choco-850 font-serif text-base">
+                      {app.company.name}
+                    </td>
+                    <td className="px-6 py-4 text-choco-700 font-medium">
+                      {app.jobTitle}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-block text-xxs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                        app.stage === 'OFFERED'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-100'
+                          : app.stage === 'REJECTED'
+                          ? 'bg-rose-50 text-rose-800 border border-rose-100'
+                          : 'bg-cream-100 text-choco-800 border border-choco-200'
+                      }`}>
+                        {app.stage}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 hidden sm:table-cell text-choco-500 font-semibold text-xs">
+                      {app.dateApplied ? new Date(app.dateApplied).toLocaleDateString() : '-'}
+                    </td>
+                    <td className="px-6 py-4 hidden md:table-cell text-choco-500 text-xs">
+                      {app.resumeVersion ? (
+                        <span className="bg-choco-50 text-choco-700 border border-choco-100 px-2 py-0.5 rounded font-semibold text-xxs">
+                          {app.resumeVersion}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-end gap-3">
+                        <button
+                          onClick={() => setSelectedAppId(app.id)}
+                          className="text-choco-600 hover:text-choco-800 font-semibold text-xs transition-colors underline cursor-pointer"
+                        >
+                          Details
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Delete this job application?')) {
+                              deleteAppMutation.mutate(app.id)
+                            }
+                          }}
+                          className="text-red-500 hover:text-red-700 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {currentApplications.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-choco-400 italic font-serif">
+                      No applications found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-cream-100/30 p-4 border-t border-choco-100 text-xs">
+              <span className="text-choco-600 font-medium">
+                Showing <span className="font-bold text-choco-800">{indexOfFirstItem + 1}</span> to{' '}
+                <span className="font-bold text-choco-800">
+                  {Math.min(indexOfLastItem, totalApplications)}
+                </span>{' '}
+                of <span className="font-bold text-choco-800">{totalApplications}</span> applications
+              </span>
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded bg-white border border-choco-200 text-choco-750 hover:bg-cream-100 transition-colors disabled:opacity-50 disabled:hover:bg-white font-bold cursor-pointer"
+                >
+                  Previous
+                </button>
+                <div className="hidden sm:flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`w-7 h-7 rounded flex items-center justify-center font-bold transition-all cursor-pointer ${
+                        currentPage === page
+                          ? 'bg-choco-800 text-cream-50'
+                          : 'bg-white border border-choco-200 text-choco-750 hover:bg-cream-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+                <span className="sm:hidden font-bold text-choco-750 px-2">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 rounded bg-white border border-choco-200 text-choco-750 hover:bg-cream-100 transition-colors disabled:opacity-50 disabled:hover:bg-white font-bold cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Side Panel: Application Detail / Timeline */}
+      {/* Pop-up Modal Card: Application Detail / Timeline */}
       {selectedAppId && (
-        <div className="fixed inset-0 bg-choco-950/45 backdrop-blur-xs flex justify-end z-50 transition-opacity">
-          <div className="w-full sm:w-[520px] bg-white h-full shadow-2xl flex flex-col animate-slide-in relative border-l border-choco-100">
+        <div className="fixed inset-0 bg-choco-950/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-opacity">
+          {/* Backdrop click to close */}
+          <div className="absolute inset-0" onClick={() => setSelectedAppId(null)} />
+          
+          <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden relative border border-choco-100 z-10">
             <button
               onClick={() => setSelectedAppId(null)}
-              className="absolute top-6 right-6 text-choco-400 hover:text-choco-700 transition-colors cursor-pointer"
+              className="absolute top-6 right-6 text-choco-400 hover:text-choco-700 transition-colors cursor-pointer z-20"
             >
               <X size={20} />
             </button>
 
             {selectedApplication ? (
-              <div className="flex flex-col h-full overflow-hidden p-6 sm:p-8 space-y-6">
-                {/* Panel Header */}
-                <div className="border-b border-choco-100 pb-5 space-y-2">
+              <div className="flex flex-col h-full overflow-hidden">
+                {/* Modal Header */}
+                <div className="p-6 sm:p-8 pb-4 border-b border-choco-100 flex flex-col space-y-2 pr-12">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-choco-600 uppercase tracking-widest font-serif">
                     <Building size={14} /> {selectedApplication.company.name}
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-serif font-extrabold text-choco-900 leading-tight">{selectedApplication.jobTitle}</h3>
+                  <h3 className="text-xl sm:text-2xl font-serif font-extrabold text-choco-900 leading-tight">
+                    {selectedApplication.jobTitle}
+                  </h3>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     {/* Interactive Stage selector in detail panel */}
                     <select
@@ -564,232 +766,235 @@ function KanbanBoardComponent() {
                   </div>
                 </div>
 
-                {/* Details list */}
-                <div className="grid grid-cols-2 gap-4 text-xs bg-cream-50/50 p-4 rounded-xl border border-choco-100/50">
-                  {selectedApplication.dateApplied && (
-                    <div>
-                      <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Date Applied</span>
-                      <span className="font-semibold text-choco-800">{new Date(selectedApplication.dateApplied).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                  {selectedApplication.expectedSalary && (
-                    <div>
-                      <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Expected Salary</span>
-                      <span className="font-semibold text-choco-800">Rp {selectedApplication.expectedSalary.toLocaleString('id-ID')}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Resume/CV Version</span>
-                    <input
-                      type="text"
-                      key={selectedApplication.id}
-                      defaultValue={selectedApplication.resumeVersion || ''}
-                      placeholder="e.g. v1.0-swe"
-                      onBlur={(e) => {
-                        const val = e.target.value.trim()
-                        if (val !== (selectedApplication.resumeVersion || '')) {
-                          updateApplicationMutation.mutate({ id: selectedApplication.id, resumeVersion: val || null })
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const val = (e.target as HTMLInputElement).value.trim()
-                          if (val !== (selectedApplication.resumeVersion || '')) {
-                            updateApplicationMutation.mutate({ id: selectedApplication.id, resumeVersion: val || null })
-                            ;(e.target as HTMLInputElement).blur()
-                          }
-                        }
-                      }}
-                      className="mt-0.5 w-full bg-transparent font-semibold text-choco-800 border-b border-transparent hover:border-choco-300 focus:border-choco-500 focus:outline-none py-0.5 transition-colors"
-                    />
-                  </div>
-                  {selectedApplication.postingUrl && (
-                    <div className="col-span-2 border-t border-choco-100/40 pt-2 mt-1">
-                      <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Job Posting</span>
-                      <a
-                        href={selectedApplication.postingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-choco-600 hover:text-choco-800 underline inline-flex items-center gap-1 font-bold break-all"
-                      >
-                        View Original Posting <Link2 size={12} />
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                {/* Delete Application Option */}
-                <div>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this entire job application and all associated notes?')) {
-                        deleteAppMutation.mutate(selectedApplication.id)
-                      }
-                    }}
-                    className="text-red-755 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 size={14} /> Delete Application
-                  </button>
-                </div>
-
-                {/* Checklist / Todos Section */}
-                <div className="border-t border-choco-100 pt-4 flex flex-col space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-serif font-bold text-choco-900 text-sm">Task Checklist</h4>
-                    {selectedApplication.todos && selectedApplication.todos.length > 0 && (
-                      <span className="text-xxs font-bold text-choco-500">
-                        {selectedApplication.todos.filter((t) => t.completed).length}/{selectedApplication.todos.length} Done
-                      </span>
+                {/* Modal Scrollable Body */}
+                <div className="p-6 sm:p-8 pt-4 overflow-y-auto space-y-6 flex-1 text-left">
+                  {/* Details list */}
+                  <div className="grid grid-cols-2 gap-4 text-xs bg-cream-50/50 p-4 rounded-xl border border-choco-100/50">
+                    {selectedApplication.dateApplied && (
+                      <div>
+                        <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Date Applied</span>
+                        <span className="font-semibold text-choco-800">{new Date(selectedApplication.dateApplied).toLocaleDateString()}</span>
+                      </div>
                     )}
-                  </div>
-
-                  {/* Add Todo Input */}
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      if (!newTodoTitle.trim()) return
-                      createTodoMutation.mutate({ appId: selectedApplication.id, title: newTodoTitle.trim() })
-                      setNewTodoTitle('')
-                    }}
-                    className="flex gap-2"
-                  >
-                    <input
-                      type="text"
-                      value={newTodoTitle}
-                      onChange={(e) => setNewTodoTitle(e.target.value)}
-                      placeholder="Add task (e.g. follow up with recruiter)..."
-                      className="flex-1 px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none focus:border-choco-500"
-                    />
-                    <button
-                      type="submit"
-                      className="bg-choco-800 hover:bg-choco-750 text-cream-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      Add
-                    </button>
-                  </form>
-
-                  {/* Todo List */}
-                  <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-                    {!selectedApplication.todos || selectedApplication.todos.length === 0 ? (
-                      <p className="text-xxs text-choco-400 italic">No checklist items yet.</p>
-                    ) : (
-                      selectedApplication.todos.map((todo) => (
-                        <div key={todo.id} className="flex items-center justify-between p-2 bg-cream-50/40 border border-choco-100/50 rounded-lg group">
-                          <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={todo.completed}
-                              onChange={(e) => updateTodoMutation.mutate({ id: todo.id, completed: e.target.checked })}
-                              className="rounded border-choco-300 text-choco-600 focus:ring-choco-500 h-3.5 w-3.5 accent-choco-700"
-                            />
-                            <span className={`text-xs truncate ${todo.completed ? 'line-through text-choco-400 font-normal' : 'text-choco-800 font-medium'}`}>
-                              {todo.title}
-                            </span>
-                          </label>
-                          <button
-                            onClick={() => deleteTodoMutation.mutate(todo.id)}
-                            className="text-choco-300 hover:text-red-655 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      ))
+                    {selectedApplication.expectedSalary && (
+                      <div>
+                        <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Expected Salary</span>
+                        <span className="font-semibold text-choco-800">Rp {selectedApplication.expectedSalary.toLocaleString('id-ID')}</span>
+                      </div>
                     )}
-                  </div>
-                </div>
-
-                {/* Notes/Timeline Section */}
-                <div className="flex-1 flex flex-col overflow-hidden space-y-4">
-                  <h4 className="font-serif font-bold text-choco-900 text-sm border-b border-choco-100 pb-2">Notes & Event Logs</h4>
-
-                  {/* Add Note Form */}
-                  <form onSubmit={handleNoteSubmit} className="bg-cream-50/30 p-4 rounded-lg border border-choco-100/60 space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Resume/CV Version</span>
                       <input
                         type="text"
-                        value={noteTitle}
-                        onChange={(e) => setNoteTitle(e.target.value)}
-                        placeholder="Note/Event Title"
-                        required
-                        className="col-span-2 px-3 py-1.5 border border-choco-200 bg-white rounded text-xs focus:outline-none focus:border-choco-500"
-                      />
-                      <select
-                        value={noteType}
-                        onChange={(e) => setNoteType(e.target.value as any)}
-                        className="px-2 py-1.5 border border-choco-200 rounded text-xs bg-white text-choco-800 focus:outline-none"
-                      >
-                        <option value="GENERAL">General Note</option>
-                        <option value="INTERVIEW">Interview</option>
-                        <option value="ASSESSMENT">Assessment</option>
-                        <option value="FEEDBACK">Feedback</option>
-                      </select>
-                      <input
-                        type="datetime-local"
-                        value={noteEventDate}
-                        onChange={(e) => setNoteEventDate(e.target.value)}
-                        placeholder="Event Date"
-                        className="px-2 py-1.5 border border-choco-200 bg-white rounded text-xs text-choco-800 focus:outline-none"
+                        key={selectedApplication.id}
+                        defaultValue={selectedApplication.resumeVersion || ''}
+                        placeholder="e.g. v1.0-swe"
+                        onBlur={(e) => {
+                          const val = e.target.value.trim()
+                          if (val !== (selectedApplication.resumeVersion || '')) {
+                            updateApplicationMutation.mutate({ id: selectedApplication.id, resumeVersion: val || null })
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = (e.target as HTMLInputElement).value.trim()
+                            if (val !== (selectedApplication.resumeVersion || '')) {
+                              updateApplicationMutation.mutate({ id: selectedApplication.id, resumeVersion: val || null })
+                              ;(e.target as HTMLInputElement).blur()
+                            }
+                          }
+                        }}
+                        className="mt-0.5 w-full bg-transparent font-semibold text-choco-800 border-b border-transparent hover:border-choco-300 focus:border-choco-500 focus:outline-none py-0.5 transition-colors"
                       />
                     </div>
-                    <textarea
-                      value={noteContent}
-                      onChange={(e) => setNoteContent(e.target.value)}
-                      placeholder="Type details, questions, or updates..."
-                      required
-                      rows={2}
-                      className="w-full px-3 py-1.5 border border-choco-200 bg-white rounded text-xs focus:outline-none focus:border-choco-500 resize-none"
-                    ></textarea>
-                    <button
-                      type="submit"
-                      disabled={createNoteMutation.isPending}
-                      className="w-full bg-choco-850 hover:bg-choco-800 text-cream-50 text-xs py-2 rounded font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
-                    >
-                      Log Note / Event
-                    </button>
-                  </form>
-
-                  {/* Notes List */}
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                    {!selectedApplication.notes || selectedApplication.notes.length === 0 ? (
-                      <div className="text-center text-xs text-choco-400 py-8 font-serif italic">
-                        No logs or notes. Add one above.
+                    {selectedApplication.postingUrl && (
+                      <div className="col-span-2 border-t border-choco-100/40 pt-2 mt-1">
+                        <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Job Posting</span>
+                        <a
+                          href={selectedApplication.postingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-choco-600 hover:text-choco-800 underline inline-flex items-center gap-1 font-bold break-all"
+                        >
+                          View Original Posting <Link2 size={12} />
+                        </a>
                       </div>
-                    ) : (
-                      selectedApplication.notes.map((note) => (
-                        <div key={note.id} className="p-3.5 bg-white border border-choco-100/60 rounded-lg space-y-1 relative group hover:border-choco-300 transition-colors">
-                          <button
-                            onClick={() => deleteNoteMutation.mutate(note.id)}
-                            className="absolute top-3.5 right-3.5 text-choco-300 hover:text-red-650 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xxs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                              note.type === 'INTERVIEW'
-                                ? 'bg-indigo-55 bg-indigo-50 text-indigo-855'
-                                : note.type === 'ASSESSMENT'
-                                ? 'bg-amber-50 text-amber-850 border border-amber-100'
-                                : note.type === 'FEEDBACK'
-                                ? 'bg-emerald-50 text-emerald-855'
-                                : 'bg-cream-100 text-choco-800'
-                            }`}>
-                              {note.type}
-                            </span>
-                            <span className="text-xxs text-choco-400 font-semibold">
-                              {new Date(note.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <h5 className="font-serif font-bold text-choco-900 text-sm mt-1">{note.title}</h5>
-                          <p className="text-xs text-choco-655 leading-relaxed font-medium">{note.content}</p>
-                          {note.eventDate && (
-                            <div className="text-xxs font-bold text-choco-500 pt-1 flex items-center gap-0.5">
-                              <Calendar size={10} />
-                              Scheduled: {new Date(note.eventDate).toLocaleString()}
-                            </div>
-                          )}
-                        </div>
-                      ))
                     )}
+                  </div>
+
+                  {/* Delete Application Option */}
+                  <div>
+                    <button
+                      onClick={() => {
+                        if (confirm('Delete this entire job application and all associated notes?')) {
+                          deleteAppMutation.mutate(selectedApplication.id)
+                        }
+                      }}
+                      className="text-red-700 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 size={14} /> Delete Application
+                    </button>
+                  </div>
+
+                  {/* Checklist / Todos Section */}
+                  <div className="border-t border-choco-100 pt-4 flex flex-col space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-serif font-bold text-choco-900 text-sm">Task Checklist</h4>
+                      {selectedApplication.todos && selectedApplication.todos.length > 0 && (
+                        <span className="text-xxs font-bold text-choco-500">
+                          {selectedApplication.todos.filter((t) => t.completed).length}/{selectedApplication.todos.length} Done
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Add Todo Input */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        if (!newTodoTitle.trim()) return
+                        createTodoMutation.mutate({ appId: selectedApplication.id, title: newTodoTitle.trim() })
+                        setNewTodoTitle('')
+                      }}
+                      className="flex gap-2"
+                    >
+                      <input
+                        type="text"
+                        value={newTodoTitle}
+                        onChange={(e) => setNewTodoTitle(e.target.value)}
+                        placeholder="Add task (e.g. follow up with recruiter)..."
+                        className="flex-1 px-3 py-1.5 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none focus:border-choco-500"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-choco-800 hover:bg-choco-750 text-cream-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </form>
+
+                    {/* Todo List */}
+                    <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                      {!selectedApplication.todos || selectedApplication.todos.length === 0 ? (
+                        <p className="text-xxs text-choco-400 italic">No checklist items yet.</p>
+                      ) : (
+                        selectedApplication.todos.map((todo) => (
+                          <div key={todo.id} className="flex items-center justify-between p-2 bg-cream-50/40 border border-choco-100/50 rounded-lg group">
+                            <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={todo.completed}
+                                onChange={(e) => updateTodoMutation.mutate({ id: todo.id, completed: e.target.checked })}
+                                className="rounded border-choco-300 text-choco-600 focus:ring-choco-500 h-3.5 w-3.5 accent-choco-700"
+                              />
+                              <span className={`text-xs truncate ${todo.completed ? 'line-through text-choco-400 font-normal' : 'text-choco-800 font-medium'}`}>
+                                {todo.title}
+                              </span>
+                            </label>
+                            <button
+                              onClick={() => deleteTodoMutation.mutate(todo.id)}
+                              className="text-choco-300 hover:text-red-700 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notes/Timeline Section */}
+                  <div className="border-t border-choco-100 pt-4 flex flex-col space-y-4">
+                    <h4 className="font-serif font-bold text-choco-900 text-sm border-b border-choco-100 pb-2">Notes & Event Logs</h4>
+
+                    {/* Add Note Form */}
+                    <form onSubmit={handleNoteSubmit} className="bg-cream-50/30 p-4 rounded-lg border border-choco-100/60 space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={noteTitle}
+                          onChange={(e) => setNoteTitle(e.target.value)}
+                          placeholder="Note/Event Title"
+                          required
+                          className="col-span-2 px-3 py-1.5 border border-choco-200 bg-white rounded text-xs focus:outline-none focus:border-choco-500"
+                        />
+                        <select
+                          value={noteType}
+                          onChange={(e) => setNoteType(e.target.value as any)}
+                          className="px-2 py-1.5 border border-choco-200 rounded text-xs bg-white text-choco-800 focus:outline-none"
+                        >
+                          <option value="GENERAL">General Note</option>
+                          <option value="INTERVIEW">Interview</option>
+                          <option value="ASSESSMENT">Assessment</option>
+                          <option value="FEEDBACK">Feedback</option>
+                        </select>
+                        <input
+                          type="datetime-local"
+                          value={noteEventDate}
+                          onChange={(e) => setNoteEventDate(e.target.value)}
+                          placeholder="Event Date"
+                          className="px-2 py-1.5 border border-choco-200 bg-white rounded text-xs text-choco-800 focus:outline-none"
+                        />
+                      </div>
+                      <textarea
+                        value={noteContent}
+                        onChange={(e) => setNoteContent(e.target.value)}
+                        placeholder="Type details, questions, or updates..."
+                        required
+                        rows={2}
+                        className="w-full px-3 py-1.5 border border-choco-200 bg-white rounded text-xs focus:outline-none focus:border-choco-500 resize-none"
+                      ></textarea>
+                      <button
+                        type="submit"
+                        disabled={createNoteMutation.isPending}
+                        className="w-full bg-choco-850 hover:bg-choco-800 text-cream-50 text-xs py-2 rounded font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                      >
+                        Log Note / Event
+                      </button>
+                    </form>
+
+                    {/* Notes List */}
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                      {!selectedApplication.notes || selectedApplication.notes.length === 0 ? (
+                        <div className="text-center text-xs text-choco-400 py-8 font-serif italic">
+                          No logs or notes. Add one above.
+                        </div>
+                      ) : (
+                        selectedApplication.notes.map((note) => (
+                          <div key={note.id} className="p-3.5 bg-white border border-choco-100/60 rounded-lg space-y-1 relative group hover:border-choco-300 transition-colors">
+                            <button
+                              onClick={() => deleteNoteMutation.mutate(note.id)}
+                              className="absolute top-3.5 right-3.5 text-choco-300 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xxs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+                                note.type === 'INTERVIEW'
+                                  ? 'bg-indigo-50 text-indigo-850 border border-indigo-100'
+                                  : note.type === 'ASSESSMENT'
+                                  ? 'bg-amber-50 text-amber-850 border border-amber-100'
+                                  : note.type === 'FEEDBACK'
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100'
+                                  : 'bg-cream-100 text-choco-800 border border-choco-200'
+                              }`}>
+                                {note.type}
+                              </span>
+                              <span className="text-xxs text-choco-400 font-semibold">
+                                {new Date(note.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <h5 className="font-serif font-bold text-choco-900 text-sm mt-1">{note.title}</h5>
+                            <p className="text-xs text-choco-600 leading-relaxed font-medium">{note.content}</p>
+                            {note.eventDate && (
+                              <div className="text-xxs font-bold text-choco-500 pt-1 flex items-center gap-0.5">
+                                <Calendar size={10} />
+                                Scheduled: {new Date(note.eventDate).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
