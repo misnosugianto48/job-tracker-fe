@@ -100,6 +100,14 @@ function KanbanBoardComponent() {
   const [isSendingPracticeMessage, setIsSendingPracticeMessage] = useState(false)
   const [isFetchingPracticeHistory, setIsFetchingPracticeHistory] = useState(false)
 
+  // AI Outreach Writer state
+  const [outreachChannel, setOutreachChannel] = useState<'EMAIL' | 'LINKEDIN'>('EMAIL')
+  const [outreachIntent, setOutreachIntent] = useState<'FOLLOW_UP' | 'NETWORKING' | 'APPLICATION'>('FOLLOW_UP')
+  const [outreachRecipient, setOutreachRecipient] = useState('')
+  const [outreachContext, setOutreachContext] = useState('')
+  const [isGeneratingOutreach, setIsGeneratingOutreach] = useState(false)
+  const [outreachResult, setOutreachResult] = useState<{ subject?: string; content: string } | null>(null)
+
   // Todo title state
   const [newTodoTitle, setNewTodoTitle] = useState('')
 
@@ -500,6 +508,56 @@ function KanbanBoardComponent() {
     } finally {
       setIsSendingPracticeMessage(false)
     }
+  }
+
+  // Handle outreach generation
+  const handleGenerateOutreach = async () => {
+    if (!selectedApplication) return
+
+    setIsGeneratingOutreach(true)
+    try {
+      const data = await apiFetch<any>(`${API_BASE}/ai/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: outreachChannel,
+          intent: outreachIntent,
+          companyName: selectedApplication.company.name,
+          jobTitle: selectedApplication.jobTitle,
+          recipientName: outreachRecipient.trim() || undefined,
+          additionalContext: outreachContext.trim() || undefined,
+        }),
+      })
+
+      setOutreachResult(data)
+      toast.success('Successfully generated outreach message!')
+    } catch (err: any) {
+      toast.error(friendlyError(err) || 'Failed to generate outreach')
+    } finally {
+      setIsGeneratingOutreach(false)
+    }
+  }
+
+  // Handle saving generated outreach as application note
+  const handleSaveOutreachAsNote = () => {
+    if (!outreachResult || !selectedAppId) return
+
+    const noteTitle = `AI Outreach: ${outreachIntent} via ${outreachChannel}`
+    const noteContent = outreachResult.subject 
+      ? `Subject: ${outreachResult.subject}\n\n${outreachResult.content}`
+      : outreachResult.content
+
+    createNoteMutation.mutate({
+      applicationId: selectedAppId,
+      title: noteTitle,
+      content: noteContent,
+      type: 'GENERAL',
+    })
+    
+    toast.success('Outreach message saved to notes!')
+    setOutreachResult(null)
+    setOutreachContext('')
+    setOutreachRecipient('')
   }
 
   // Handle note submit
@@ -1026,6 +1084,128 @@ function KanbanBoardComponent() {
                       >
                         <MessageSquareCode size={14} /> Practice Interview
                       </button>
+                    </div>
+                  </div>
+
+                  {/* AI Outreach Writer Section */}
+                  <div className="border-t border-choco-100 pt-4 flex flex-col space-y-3">
+                    <h4 className="font-serif font-bold text-choco-900 text-sm">AI Outreach Writer</h4>
+                    
+                    <div className="bg-cream-50/30 p-4 rounded-lg border border-choco-100/60 space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] font-bold text-choco-500 uppercase tracking-wider">Channel</label>
+                          <select
+                            value={outreachChannel}
+                            onChange={(e) => {
+                              setOutreachChannel(e.target.value as any)
+                              setOutreachResult(null)
+                            }}
+                            className="px-2 py-1.5 border border-choco-200 rounded text-xs bg-white text-choco-800 focus:outline-none"
+                          >
+                            <option value="EMAIL">Email</option>
+                            <option value="LINKEDIN">LinkedIn DM</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] font-bold text-choco-500 uppercase tracking-wider">Intent</label>
+                          <select
+                            value={outreachIntent}
+                            onChange={(e) => {
+                              setOutreachIntent(e.target.value as any)
+                              setOutreachResult(null)
+                            }}
+                            className="px-2 py-1.5 border border-choco-200 rounded text-xs bg-white text-choco-800 focus:outline-none"
+                          >
+                            <option value="FOLLOW_UP">Follow Up</option>
+                            <option value="NETWORKING">Networking Intro</option>
+                            <option value="APPLICATION">Cold Application</option>
+                          </select>
+                        </div>
+                        <div className="col-span-2 flex flex-col space-y-1">
+                          <label className="text-[10px] font-bold text-choco-500 uppercase tracking-wider">Recipient Name (Optional)</label>
+                          <input
+                            type="text"
+                            value={outreachRecipient}
+                            onChange={(e) => setOutreachRecipient(e.target.value)}
+                            placeholder="e.g. Recruiter Name, Hiring Manager"
+                            className="px-3 py-1.5 border border-choco-200 bg-white rounded text-xs focus:outline-none focus:border-choco-500"
+                          />
+                        </div>
+                        <div className="col-span-2 flex flex-col space-y-1">
+                          <label className="text-[10px] font-bold text-choco-500 uppercase tracking-wider">Additional Context (Optional)</label>
+                          <textarea
+                            value={outreachContext}
+                            onChange={(e) => setOutreachContext(e.target.value)}
+                            placeholder="e.g. We met at the local JS meetup, or I was referred by..."
+                            rows={2}
+                            className="w-full px-3 py-1.5 border border-choco-200 bg-white rounded text-xs focus:outline-none focus:border-choco-500 resize-none font-medium text-choco-850"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleGenerateOutreach}
+                        disabled={isGeneratingOutreach}
+                        className="w-full bg-choco-850 hover:bg-choco-800 text-cream-50 text-xs py-2 rounded font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                      >
+                        {isGeneratingOutreach ? "Generating Template..." : "Generate Outreach Template"}
+                      </button>
+
+                      {/* Display Outreach Result */}
+                      {outreachResult && (
+                        <div className="mt-3 bg-white p-3 rounded border border-choco-100 space-y-2 text-left relative animate-fadeIn">
+                          {outreachResult.subject && (
+                            <div className="border-b border-choco-100/50 pb-2">
+                              <span className="text-[10px] font-bold text-choco-400 block uppercase tracking-wider">Subject Line</span>
+                              <div className="flex justify-between items-center gap-2 mt-0.5">
+                                <span className="text-xs text-choco-850 font-bold">{outreachResult.subject}</span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(outreachResult.subject || "")
+                                    toast.success("Subject copied!")
+                                  }}
+                                  className="text-choco-500 hover:text-choco-800 text-xxs font-bold underline"
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-bold text-choco-400 uppercase tracking-wider">Message Content</span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(outreachResult.content)
+                                  toast.success("Content copied!")
+                                }}
+                                className="text-choco-500 hover:text-choco-800 text-xxs font-bold underline"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                            <p className="text-xs text-choco-800 leading-relaxed font-medium font-mono bg-cream-50/30 p-2.5 rounded border border-choco-50 mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap">
+                              {outreachResult.content}
+                            </p>
+                          </div>
+                          
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={handleSaveOutreachAsNote}
+                              className="flex-grow bg-cream-100 hover:bg-cream-200/60 text-choco-850 border border-choco-200 text-xxs py-1.5 rounded font-bold transition-colors cursor-pointer"
+                            >
+                              Save to Notes
+                            </button>
+                            <button
+                              onClick={() => setOutreachResult(null)}
+                              className="px-3 bg-transparent hover:bg-cream-50 text-choco-500 border border-transparent text-xxs py-1.5 rounded font-bold transition-colors cursor-pointer"
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
