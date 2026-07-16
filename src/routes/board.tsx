@@ -9,7 +9,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X, Wand2 } from 'lucide-react'
+import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X, Wand2, MessageSquareCode, Bot } from 'lucide-react'
 import { z } from 'zod'
 
 interface Company {
@@ -92,6 +92,13 @@ function KanbanBoardComponent() {
   const [tailorJobDescription, setTailorJobDescription] = useState('')
   const [isTailoring, setIsTailoring] = useState(false)
   const [tailorResult, setTailorResult] = useState<{ keySkills: string[], missingKeywords: string[], coverLetter: string } | null>(null)
+
+  // AI Interview Coach state
+  const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false)
+  const [practiceMessages, setPracticeMessages] = useState<{ role: 'user' | 'model'; content: string; createdAt?: string }[]>([])
+  const [practiceInputMessage, setPracticeInputMessage] = useState('')
+  const [isSendingPracticeMessage, setIsSendingPracticeMessage] = useState(false)
+  const [isFetchingPracticeHistory, setIsFetchingPracticeHistory] = useState(false)
 
   // Todo title state
   const [newTodoTitle, setNewTodoTitle] = useState('')
@@ -453,6 +460,46 @@ function KanbanBoardComponent() {
     toast.success('Cover letter saved to notes!')
     setIsTailorModalOpen(false)
     setTailorResult(null)
+  }
+
+  // Fetch practice history
+  const fetchPracticeHistory = async (appId: number) => {
+    setIsFetchingPracticeHistory(true)
+    try {
+      const data = await apiFetch<any>(`${API_BASE}/applications/${appId}/practice`)
+      setPracticeMessages(data.messages || [])
+    } catch (err: any) {
+      toast.error(friendlyError(err) || 'Failed to fetch interview history')
+    } finally {
+      setIsFetchingPracticeHistory(false)
+    }
+  }
+
+  // Handle sending mock interview message
+  const handleSendPracticeMessage = async () => {
+    if (!practiceInputMessage.trim() || !selectedAppId) return
+
+    const userMsg = practiceInputMessage.trim()
+    setPracticeInputMessage('')
+    
+    // Optimistically add user message to chat UI
+    const updatedMessages = [...practiceMessages, { role: 'user' as const, content: userMsg, createdAt: new Date().toISOString() }]
+    setPracticeMessages(updatedMessages)
+    
+    setIsSendingPracticeMessage(true)
+    try {
+      const data = await apiFetch<any>(`${API_BASE}/applications/${selectedAppId}/practice/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg }),
+      })
+
+      setPracticeMessages([...updatedMessages, { role: 'model' as const, content: data.content, createdAt: new Date().toISOString() }])
+    } catch (err: any) {
+      toast.error(friendlyError(err) || 'Failed to send message to interviewer')
+    } finally {
+      setIsSendingPracticeMessage(false)
+    }
   }
 
   // Handle note submit
@@ -962,6 +1009,26 @@ function KanbanBoardComponent() {
                     </div>
                   </div>
 
+                  {/* AI Mock Interview Coach Section */}
+                  <div className="border-t border-choco-100 pt-4 flex flex-col space-y-2">
+                    <div className="flex justify-between items-center bg-cream-50/50 p-4 rounded-xl border border-choco-100/50">
+                      <div>
+                        <h4 className="font-serif font-bold text-choco-900 text-sm">AI Interview Coach</h4>
+                        <p className="text-xxs text-choco-500 font-medium">Practice standard or role-specific mock interviews with an AI recruiter.</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setPracticeMessages([])
+                          setIsPracticeModalOpen(true)
+                          fetchPracticeHistory(selectedApplication.id)
+                        }}
+                        className="bg-choco-850 hover:bg-choco-800 text-cream-50 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                      >
+                        <MessageSquareCode size={14} /> Practice Interview
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Checklist / Todos Section */}
                   <div className="border-t border-choco-100 pt-4 flex flex-col space-y-3">
                     <div className="flex justify-between items-center">
@@ -1251,6 +1318,140 @@ function KanbanBoardComponent() {
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dialog: AI Interview Coach */}
+      {isPracticeModalOpen && (
+        <div className="fixed inset-0 bg-choco-950/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="absolute inset-0" onClick={() => setIsPracticeModalOpen(false)} />
+          
+          <div className="bg-white rounded-xl border border-choco-150 shadow-2xl w-[600px] max-w-full h-[650px] max-h-[90vh] flex flex-col overflow-hidden z-10 relative text-left">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-choco-100 flex justify-between items-center bg-cream-50/20">
+              <div>
+                <h3 className="text-base font-serif font-extrabold text-choco-900 flex items-center gap-1.5">
+                  <Bot size={20} className="text-choco-700" /> AI Interview Coach
+                </h3>
+                <p className="text-xxs font-semibold text-choco-500 uppercase tracking-widest mt-0.5">
+                  {selectedApplication?.jobTitle} • {selectedApplication?.company.name}
+                </p>
+              </div>
+              <button onClick={() => setIsPracticeModalOpen(false)} className="text-choco-400 hover:text-choco-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Chat Area */}
+            <div className="flex-1 p-4 overflow-y-auto bg-cream-50/10 space-y-4 flex flex-col">
+              {isFetchingPracticeHistory ? (
+                <div className="flex flex-col items-center justify-center h-full space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-choco-700"></div>
+                  <span className="text-xs text-choco-500 font-semibold font-serif">Loading chat logs...</span>
+                </div>
+              ) : practiceMessages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-4">
+                  <div className="bg-cream-100 p-4 rounded-full border border-choco-100">
+                    <MessageSquareCode size={36} className="text-choco-650" />
+                  </div>
+                  <div>
+                    <h4 className="font-serif font-bold text-choco-900 text-sm">Start Your Mock Interview Practice</h4>
+                    <p className="text-xs text-choco-500 mt-1 max-w-md">
+                      Get real-time practice questions based on this role and receive conversational feedback.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setPracticeInputMessage("Let's start the mock interview.")
+                      // Short delay so state updates before send
+                      setTimeout(() => {
+                        handleSendPracticeMessage()
+                      }, 50)
+                    }}
+                    className="bg-choco-850 hover:bg-choco-800 text-cream-50 text-xs px-4 py-2.5 rounded-lg font-bold transition-colors shadow-xs cursor-pointer"
+                  >
+                    Start Interview
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 flex-grow flex-shrink overflow-y-auto pr-1">
+                  {practiceMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex gap-3 max-w-[85%] ${
+                        msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''
+                      }`}
+                    >
+                      {msg.role !== 'user' && (
+                        <div className="flex-shrink-0 bg-cream-100 p-1.5 rounded-full border border-choco-100 h-8 w-8 flex items-center justify-center">
+                          <Bot size={16} className="text-choco-650" />
+                        </div>
+                      )}
+                      
+                      <div
+                        className={`p-3 rounded-xl text-xs leading-relaxed font-medium ${
+                          msg.role === 'user'
+                            ? 'bg-choco-850 text-cream-50 rounded-tr-none'
+                            : 'bg-white text-choco-850 border border-choco-100 rounded-tl-none shadow-xxs'
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        {msg.createdAt && (
+                          <span
+                            className={`text-[9px] block text-right mt-1.5 font-semibold ${
+                              msg.role === 'user' ? 'text-cream-200/80' : 'text-choco-400'
+                            }`}
+                          >
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isSendingPracticeMessage && (
+                    <div className="flex gap-3 max-w-[80%]">
+                      <div className="flex-shrink-0 bg-cream-100 p-1.5 rounded-full border border-choco-100 h-8 w-8 flex items-center justify-center">
+                        <Bot size={16} className="text-choco-650 animate-pulse" />
+                      </div>
+                      <div className="bg-white text-choco-850 border border-choco-100 p-3 rounded-xl rounded-tl-none shadow-xxs flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 bg-choco-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                        <span className="h-1.5 w-1.5 bg-choco-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                        <span className="h-1.5 w-1.5 bg-choco-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Input Bar */}
+            {practiceMessages.length > 0 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  handleSendPracticeMessage()
+                }}
+                className="p-3 bg-cream-50/20 border-t border-choco-100 flex gap-2 items-center"
+              >
+                <input
+                  type="text"
+                  value={practiceInputMessage}
+                  onChange={(e) => setPracticeInputMessage(e.target.value)}
+                  placeholder="Type your answer or ask a question..."
+                  disabled={isSendingPracticeMessage}
+                  className="flex-1 px-3 py-2 border border-choco-200 bg-white rounded-lg text-xs focus:outline-none focus:border-choco-500 font-medium"
+                />
+                <button
+                  type="submit"
+                  disabled={isSendingPracticeMessage || !practiceInputMessage.trim()}
+                  className="bg-choco-850 hover:bg-choco-800 disabled:opacity-50 text-cream-50 text-xs px-4 py-2 rounded-lg font-semibold transition-colors cursor-pointer shadow-xs"
+                >
+                  Send
+                </button>
+              </form>
             )}
           </div>
         </div>
