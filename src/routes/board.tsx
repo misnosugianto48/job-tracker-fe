@@ -60,7 +60,7 @@ import { API_BASE, apiFetch, friendlyError } from '../lib/api'
 const STAGES = ['WISHLIST', 'APPLIED', 'ASSESSMENT', 'INTERVIEW', 'OFFERED', 'REJECTED'] as const
 type StageType = typeof STAGES[number]
 
-function KanbanBoardComponent() {
+export function KanbanBoardComponent() {
   const queryClient = useQueryClient()
   
   // State for modals and panels
