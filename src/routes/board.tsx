@@ -86,6 +86,13 @@ function KanbanBoardComponent() {
   const [isParsing, setIsParsing] = useState(false)
   const [extractedTodos, setExtractedTodos] = useState<string[]>([])
 
+  // AI Tailor form state
+  const [isTailorModalOpen, setIsTailorModalOpen] = useState(false)
+  const [tailorResumeText, setTailorResumeText] = useState(() => localStorage.getItem('user_resume_text') || '')
+  const [tailorJobDescription, setTailorJobDescription] = useState('')
+  const [isTailoring, setIsTailoring] = useState(false)
+  const [tailorResult, setTailorResult] = useState<{ keySkills: string[], missingKeywords: string[], coverLetter: string } | null>(null)
+
   // Todo title state
   const [newTodoTitle, setNewTodoTitle] = useState('')
 
@@ -401,6 +408,51 @@ function KanbanBoardComponent() {
     } finally {
       setIsParsing(false)
     }
+  }
+
+  // Handle AI Resume Tailor
+  const handleTailorResume = async () => {
+    if (!tailorJobDescription.trim() || !tailorResumeText.trim()) {
+      toast.error('Both job description and resume text are required.')
+      return
+    }
+
+    setIsTailoring(true)
+    try {
+      localStorage.setItem('user_resume_text', tailorResumeText.trim())
+
+      const data = await apiFetch<any>(`${API_BASE}/ai/tailor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobDescription: tailorJobDescription.trim(),
+          resumeText: tailorResumeText.trim(),
+        }),
+      })
+
+      setTailorResult(data)
+      toast.success('Successfully analyzed and tailored resume!')
+    } catch (err: any) {
+      toast.error(friendlyError(err) || 'Failed to tailor resume')
+    } finally {
+      setIsTailoring(false)
+    }
+  }
+
+  // Handle saving cover letter as application note
+  const handleSaveCoverLetterAsNote = () => {
+    if (!tailorResult || !selectedAppId) return
+
+    createNoteMutation.mutate({
+      applicationId: selectedAppId,
+      title: 'AI Tailored Cover Letter',
+      content: tailorResult.coverLetter,
+      type: 'GENERAL',
+    })
+    
+    toast.success('Cover letter saved to notes!')
+    setIsTailorModalOpen(false)
+    setTailorResult(null)
   }
 
   // Handle note submit
@@ -890,6 +942,26 @@ function KanbanBoardComponent() {
                     </button>
                   </div>
 
+                  {/* AI Tailoring Section */}
+                  <div className="border-t border-choco-100 pt-4 flex flex-col space-y-2">
+                    <div className="flex justify-between items-center bg-cream-50/50 p-4 rounded-xl border border-choco-100/50">
+                      <div>
+                        <h4 className="font-serif font-bold text-choco-900 text-sm">AI Resume Tailoring</h4>
+                        <p className="text-xxs text-choco-500 font-medium">Generate matching skills, missing keywords, and tailored cover letters.</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setTailorJobDescription('')
+                          setTailorResult(null)
+                          setIsTailorModalOpen(true)
+                        }}
+                        className="bg-choco-850 hover:bg-choco-800 text-cream-50 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                      >
+                        <Wand2 size={14} /> Tailor Resume
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Checklist / Todos Section */}
                   <div className="border-t border-choco-100 pt-4 flex flex-col space-y-3">
                     <div className="flex justify-between items-center">
@@ -1054,6 +1126,131 @@ function KanbanBoardComponent() {
               </div>
             ) : (
               <div className="p-8 text-center text-choco-500 font-serif italic">Loading details...</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dialog: AI Resume Tailoring & Cover Letter */}
+      {isTailorModalOpen && (
+        <div className="fixed inset-0 bg-choco-950/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="absolute inset-0" onClick={() => setIsTailorModalOpen(false)} />
+          
+          <div className="bg-white p-6 rounded-xl border border-choco-150 shadow-2xl w-[650px] max-w-full space-y-4 max-h-[90vh] overflow-y-auto z-10 relative text-left">
+            <div className="flex justify-between items-center border-b border-choco-100 pb-3">
+              <h3 className="text-lg font-serif font-bold text-choco-900 flex items-center gap-1.5">
+                <Wand2 size={20} className="text-choco-700" /> AI Resume Tailor
+              </h3>
+              <button onClick={() => setIsTailorModalOpen(false)} className="text-choco-400 hover:text-choco-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {!tailorResult ? (
+              <div className="space-y-4">
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-xs font-bold text-choco-700 uppercase tracking-wider">Your Resume / CV Text</label>
+                  <p className="text-xxs text-choco-400 font-medium">Paste your work history, skills, and experience. This is saved locally for convenience.</p>
+                  <textarea
+                    value={tailorResumeText}
+                    onChange={(e) => setTailorResumeText(e.target.value)}
+                    placeholder="E.g. Senior Software Engineer with 5 years experience in React, Node.js..."
+                    rows={6}
+                    className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none focus:border-choco-500 font-medium"
+                  />
+                </div>
+
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-xs font-bold text-choco-700 uppercase tracking-wider">Job Description</label>
+                  <p className="text-xxs text-choco-400 font-medium">Paste the job description of the role you are applying to.</p>
+                  <textarea
+                    value={tailorJobDescription}
+                    onChange={(e) => setTailorJobDescription(e.target.value)}
+                    placeholder="Paste details of the job posting..."
+                    rows={6}
+                    className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-xs focus:outline-none focus:border-choco-500 font-medium"
+                  />
+                </div>
+
+                <button
+                  onClick={handleTailorResume}
+                  disabled={isTailoring || !tailorResumeText.trim() || !tailorJobDescription.trim()}
+                  className="w-full bg-choco-850 hover:bg-choco-800 text-cream-50 text-xs py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50 cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  {isTailoring ? "Analyzing and Tailoring..." : "Tailor Resume & Cover Letter"}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Matched Skills */}
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold text-choco-700 uppercase tracking-wider">Matched Key Skills</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tailorResult.keySkills.length > 0 ? (
+                      tailorResult.keySkills.map((s, idx) => (
+                        <span key={idx} className="bg-emerald-50 text-emerald-800 border border-emerald-100 px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider">
+                          {s}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xxs text-choco-400 font-medium">No matched skills detected.</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Missing Keywords */}
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold text-choco-700 uppercase tracking-wider">Missing Keywords / Skills to Add</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tailorResult.missingKeywords.length > 0 ? (
+                      tailorResult.missingKeywords.map((s, idx) => (
+                        <span key={idx} className="bg-amber-50 text-amber-800 border border-amber-100 px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider">
+                          {s}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xxs text-choco-400 font-medium">All keywords matched!</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Cover Letter */}
+                <div className="flex flex-col space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-choco-700 uppercase tracking-wider">Tailored Cover Letter Draft</label>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(tailorResult.coverLetter)
+                        toast.success("Cover letter copied to clipboard!")
+                      }}
+                      className="text-choco-600 hover:text-choco-850 text-xxs font-bold underline cursor-pointer"
+                    >
+                      Copy Letter
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={tailorResult.coverLetter}
+                    rows={10}
+                    className="w-full px-3 py-2 border border-choco-200 bg-cream-50/20 rounded-lg text-xs focus:outline-none font-medium resize-y font-mono text-choco-800"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveCoverLetterAsNote}
+                    className="flex-1 bg-choco-850 hover:bg-choco-800 text-cream-50 text-xs py-2 rounded-lg font-semibold transition-colors cursor-pointer shadow-sm"
+                  >
+                    Save as Application Note
+                  </button>
+                  <button
+                    onClick={() => setTailorResult(null)}
+                    className="px-4 py-2 border border-choco-200 hover:bg-cream-50/40 text-choco-700 text-xs rounded-lg font-semibold transition-colors cursor-pointer"
+                  >
+                    Tailor Again
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
