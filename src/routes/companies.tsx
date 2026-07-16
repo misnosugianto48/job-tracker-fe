@@ -476,7 +476,7 @@ function CompaniesComponent() {
                                         deleteMutation.mutate(company.id)
                                       }
                                     }}
-                                    className="hover:text-red-755 font-semibold text-xs transition-colors cursor-pointer"
+                                    className="hover:text-red-700 font-semibold text-xs transition-colors cursor-pointer"
                                   >
                                     Delete
                                   </button>
@@ -894,7 +894,7 @@ function CompaniesComponent() {
                                           deleteContactMutation.mutate(contact.id)
                                         }
                                       }}
-                                      className="text-xxs text-choco-400 hover:text-red-750 underline font-semibold transition-colors"
+                                      className="text-xxs text-choco-400 hover:text-red-700 underline font-semibold transition-colors"
                                     >
                                       Delete
                                     </button>
