@@ -9,7 +9,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X } from 'lucide-react'
+import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X, Wand2 } from 'lucide-react'
 import { z } from 'zod'
 
 interface Company {
@@ -82,6 +82,9 @@ function KanbanBoardComponent() {
   const [newExpectedSalary, setNewExpectedSalary] = useState('')
   const [newStage, setNewStage] = useState<StageType>('WISHLIST')
   const [newResumeVersion, setNewResumeVersion] = useState('')
+  const [rawDescription, setRawDescription] = useState('')
+  const [isParsing, setIsParsing] = useState(false)
+  const [extractedTodos, setExtractedTodos] = useState<string[]>([])
 
   // Todo title state
   const [newTodoTitle, setNewTodoTitle] = useState('')
@@ -231,6 +234,8 @@ function KanbanBoardComponent() {
       setNewExpectedSalary('')
       setNewStage('WISHLIST')
       setNewResumeVersion('')
+      setRawDescription('')
+      setExtractedTodos([])
     },
     onError: (err) => {
       toast.error(friendlyError(err))
@@ -319,6 +324,7 @@ function KanbanBoardComponent() {
     expectedSalary: z.number().int().nonnegative().nullable().optional(),
     stage: z.enum(['WISHLIST', 'APPLIED', 'ASSESSMENT', 'INTERVIEW', 'OFFERED', 'REJECTED']),
     resumeVersion: z.string().trim().nullable().optional(),
+    todos: z.array(z.string()).optional(),
   })
 
   // Handle application submit
@@ -338,6 +344,7 @@ function KanbanBoardComponent() {
       expectedSalary: newExpectedSalary ? parseInt(newExpectedSalary, 10) : null,
       stage: newStage,
       resumeVersion: newResumeVersion.trim() || null,
+      todos: extractedTodos.length > 0 ? extractedTodos : undefined,
     }
 
     const validation = applicationFormSchema.safeParse(rawData)
@@ -347,6 +354,53 @@ function KanbanBoardComponent() {
     }
 
     createAppMutation.mutate(validation.data)
+  }
+
+  // Handle AI parsing of job description
+  const handleAiParse = async () => {
+    if (!rawDescription.trim()) return
+
+    setIsParsing(true)
+    try {
+      const data = await apiFetch<any>(`${API_BASE}/ai/parse-job`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: rawDescription.trim() }),
+      })
+
+      // Try matching the company name to an existing company
+      if (data.companyName && companies) {
+        const matchedCompany = companies.find(
+          (c) => c.name.toLowerCase() === data.companyName.toLowerCase()
+        )
+        if (matchedCompany) {
+          setNewCompanyId(matchedCompany.id.toString())
+          toast.success(`Matched company: ${matchedCompany.name}`)
+        } else {
+          setNewCompanyId('')
+          toast(
+            `Parsed company "${data.companyName}" not found. Please register it in the Company Directory first.`,
+            { icon: '⚠️' }
+          )
+        }
+      }
+
+      if (data.jobTitle) {
+        setNewJobTitle(data.jobTitle)
+      }
+      if (data.expectedSalary) {
+        setNewExpectedSalary(data.expectedSalary.toString())
+      }
+      if (data.todos) {
+        setExtractedTodos(data.todos)
+      }
+
+      toast.success('Successfully parsed job posting!')
+    } catch (err: any) {
+      toast.error(friendlyError(err) || 'Failed to parse job description')
+    } finally {
+      setIsParsing(false)
+    }
   }
 
   // Handle note submit
@@ -1008,7 +1062,7 @@ function KanbanBoardComponent() {
       {/* Modal Dialog: Add Application */}
       {isAddAppOpen && (
         <div className="fixed inset-0 bg-choco-950/45 backdrop-blur-xs flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl border border-choco-150 shadow-2xl w-[450px] max-w-[90%] sm:max-w-full space-y-4">
+          <div className="bg-white p-6 rounded-xl border border-choco-150 shadow-2xl w-[550px] max-w-[95%] sm:max-w-full space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-choco-100 pb-3">
               <h3 className="text-lg font-serif font-bold text-choco-900">Add New Application</h3>
               <button onClick={() => setIsAddAppOpen(false)} className="text-choco-400 hover:text-choco-600 cursor-pointer">
@@ -1017,6 +1071,66 @@ function KanbanBoardComponent() {
             </div>
 
             <form onSubmit={handleCreateAppSubmit} className="space-y-4">
+              {/* AI Auto-Fill Panel */}
+              <div className="bg-cream-50 p-4 rounded-xl border border-choco-100/70 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-choco-700 flex items-center gap-1.5">
+                    <Wand2 size={14} className="text-choco-600 animate-pulse" />
+                    Auto-Fill with AI
+                  </label>
+                  {rawDescription && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRawDescription('')
+                        setExtractedTodos([])
+                      }}
+                      className="text-xxs text-choco-400 hover:text-choco-600 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={rawDescription}
+                  onChange={(e) => setRawDescription(e.target.value)}
+                  placeholder="Paste LinkedIn/Indeed job details or text description here..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-choco-200 bg-white rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-choco-500/20 focus:border-choco-500 transition-colors resize-none text-choco-800"
+                />
+                <button
+                  type="button"
+                  onClick={handleAiParse}
+                  disabled={isParsing || !rawDescription.trim()}
+                  className="w-full py-2 bg-choco-700 hover:bg-choco-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isParsing ? (
+                    <>
+                      <Wand2 size={12} className="animate-spin" />
+                      Parsing description with Gemini...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 size={12} />
+                      Parse Posting with AI
+                    </>
+                  )}
+                </button>
+
+                {extractedTodos.length > 0 && (
+                  <div className="bg-green-50 border border-green-150 p-3 rounded-lg space-y-1">
+                    <label className="block text-xxs font-bold uppercase tracking-wider text-green-700">
+                      Extracted checklist tasks ({extractedTodos.length})
+                    </label>
+                    <ul className="list-disc pl-4 text-xxs text-green-800 space-y-0.5 font-medium">
+                      {extractedTodos.map((todo, idx) => (
+                        <li key={idx}>{todo}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-choco-500 mb-1">
                   Target Company *
