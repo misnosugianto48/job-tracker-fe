@@ -1,6 +1,6 @@
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
-import { Briefcase, LayoutDashboard, Building, Columns } from 'lucide-react'
+import { LayoutDashboard, Building, Columns } from 'lucide-react'
 
 interface MyRouterContext {
   queryClient: QueryClient
@@ -17,10 +17,13 @@ function RootComponent() {
       <aside className="hidden md:flex w-64 bg-choco-900 text-cream-100 flex-col justify-between border-r border-choco-800 shrink-0">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-10 border-b border-choco-800 pb-6">
-            <Briefcase size={22} className="text-cream-200" />
-            <span className="text-xl font-serif font-extrabold tracking-widest text-cream-200">
-              TRACKER.CMS
-            </span>
+            <Link to="/" className="flex items-center justify-start w-full transition-transform duration-250 hover:scale-[1.03]">
+              <img 
+                src="/jobtracker-logo.png" 
+                alt="JobTracker" 
+                className="h-10 w-auto object-contain max-w-full rounded-xl border border-choco-700/50 shadow-sm" 
+              />
+            </Link>
           </div>
           
           <nav className="space-y-2">
@@ -59,7 +62,14 @@ function RootComponent() {
       <main className="flex-1 flex flex-col overflow-hidden bg-cream-50">
         <header className="h-16 border-b border-choco-100 bg-cream-100/50 backdrop-blur-md flex items-center justify-between px-6 md:px-8 shadow-xs">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg md:text-xl font-serif font-bold text-choco-800 italic">Career Journal CMS</h1>
+            <Link to="/" className="flex items-center gap-2 transition-opacity duration-200 hover:opacity-90">
+              <img 
+                src="/jobtracker-logo.png" 
+                alt="JobTracker" 
+                className="h-8 w-auto object-contain md:hidden rounded-lg border border-choco-100 shadow-xs" 
+              />
+              <h1 className="text-lg md:text-xl font-serif font-bold text-choco-800 italic">Career Journal CMS</h1>
+            </Link>
           </div>
         </header>
 
