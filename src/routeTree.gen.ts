@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as CvAnalystRouteImport } from './routes/cv-analyst'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as BoardRouteImport } from './routes/board'
 import { Route as IndexRouteImport } from './routes/index'
 
+const CvAnalystRoute = CvAnalystRouteImport.update({
+  id: '/cv-analyst',
+  path: '/cv-analyst',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CompaniesRoute = CompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
@@ -33,34 +39,45 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/board': typeof BoardRoute
   '/companies': typeof CompaniesRoute
+  '/cv-analyst': typeof CvAnalystRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/board': typeof BoardRoute
   '/companies': typeof CompaniesRoute
+  '/cv-analyst': typeof CvAnalystRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/board': typeof BoardRoute
   '/companies': typeof CompaniesRoute
+  '/cv-analyst': typeof CvAnalystRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/board' | '/companies'
+  fullPaths: '/' | '/board' | '/companies' | '/cv-analyst'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/board' | '/companies'
-  id: '__root__' | '/' | '/board' | '/companies'
+  to: '/' | '/board' | '/companies' | '/cv-analyst'
+  id: '__root__' | '/' | '/board' | '/companies' | '/cv-analyst'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BoardRoute: typeof BoardRoute
   CompaniesRoute: typeof CompaniesRoute
+  CvAnalystRoute: typeof CvAnalystRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/cv-analyst': {
+      id: '/cv-analyst'
+      path: '/cv-analyst'
+      fullPath: '/cv-analyst'
+      preLoaderRoute: typeof CvAnalystRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/companies': {
       id: '/companies'
       path: '/companies'
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BoardRoute: BoardRoute,
   CompaniesRoute: CompaniesRoute,
+  CvAnalystRoute: CvAnalystRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

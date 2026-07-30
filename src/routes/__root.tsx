@@ -1,6 +1,6 @@
 import { createRootRouteWithContext, Link, Outlet } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
-import { LayoutDashboard, Building, Columns } from 'lucide-react'
+import { LayoutDashboard, Building, Columns, FileText } from 'lucide-react'
 
 interface MyRouterContext {
   queryClient: QueryClient
@@ -50,6 +50,14 @@ function RootComponent() {
               className="flex items-center gap-3 py-3 rounded-r-lg text-sm font-medium transition-all"
             >
               Kanban Board
+            </Link>
+            <Link
+              to="/cv-analyst"
+              activeProps={{ className: 'bg-choco-800 text-cream-50 font-bold border-l-4 border-cream-200 pl-3' }}
+              inactiveProps={{ className: 'text-choco-300 hover:text-cream-50 hover:bg-choco-800/50 pl-4' }}
+              className="flex items-center gap-3 py-3 rounded-r-lg text-sm font-medium transition-all"
+            >
+              CV Analyst
             </Link>
           </nav>
         </div>
@@ -107,6 +115,15 @@ function RootComponent() {
         >
           <Columns size={20} />
           <span>Board</span>
+        </Link>
+        <Link
+          to="/cv-analyst"
+          activeProps={{ className: 'text-cream-200 font-bold scale-105' }}
+          inactiveProps={{ className: 'text-choco-300' }}
+          className="flex flex-col items-center gap-1 py-1.5 transition-all text-[10px] font-medium w-full"
+        >
+          <FileText size={20} />
+          <span>CV Analyst</span>
         </Link>
       </nav>
     </div>
