@@ -129,7 +129,7 @@ describe("KanbanBoardComponent UI Tests", () => {
     };
 
     // We'll mock the apiFetch responses for this test
-    vi.mocked(apiFetch).mockImplementation(async (url: string, init?: RequestInit) => {
+    vi.mocked(apiFetch).mockImplementation(async (url: string) => {
       if (url.includes("/applications/1")) {
         return mockAppWithDesc;
       }

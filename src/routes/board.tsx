@@ -9,7 +9,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X, Wand2, MessageSquareCode, Bot, CheckCircle, HelpCircle } from 'lucide-react'
+import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X, Wand2, MessageSquareCode, Bot } from 'lucide-react'
 import { z } from 'zod'
 
 interface FitAnalysisResult {
@@ -54,6 +54,7 @@ interface Application {
   expectedSalary: number | null
   stage: 'WISHLIST' | 'APPLIED' | 'ASSESSMENT' | 'INTERVIEW' | 'OFFERED' | 'REJECTED'
   resumeVersion: string | null
+  description: string | null
   notes?: Note[]
   todos?: Todo[]
   createdAt: string
