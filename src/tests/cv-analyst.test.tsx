@@ -92,7 +92,7 @@ describe("CvAnalystComponent UI Tests", () => {
     // Verify API request details
     expect(apiFetch).toHaveBeenCalledTimes(1);
     const callArgs = vi.mocked(apiFetch).mock.calls[0];
-    expect(callArgs[0]).toContain("/api/ai/analyze-cv");
+    expect(callArgs[0]).toContain("/ai/analyze-cv");
     expect(callArgs[1]?.method).toBe("POST");
     
     const body = JSON.parse(callArgs[1]?.body as string);
