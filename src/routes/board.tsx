@@ -7,10 +7,18 @@
 
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X, Wand2, MessageSquareCode, Bot } from 'lucide-react'
+import { Plus, Calendar, Trash2, Link2, Building, AlertCircle, X, Wand2, MessageSquareCode, Bot, CheckCircle, HelpCircle } from 'lucide-react'
 import { z } from 'zod'
+
+interface FitAnalysisResult {
+  score: number
+  pros: string[]
+  cons: string[]
+  recommendations: string[]
+  skillsBreakdown: { skill: string; status: 'MATCH' | 'PARTIAL' | 'MISSING' }[]
+}
 
 interface Company {
   id: number
@@ -82,6 +90,7 @@ export function KanbanBoardComponent() {
   const [newExpectedSalary, setNewExpectedSalary] = useState('')
   const [newStage, setNewStage] = useState<StageType>('WISHLIST')
   const [newResumeVersion, setNewResumeVersion] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [rawDescription, setRawDescription] = useState('')
   const [isParsing, setIsParsing] = useState(false)
   const [extractedTodos, setExtractedTodos] = useState<string[]>([])
@@ -92,6 +101,14 @@ export function KanbanBoardComponent() {
   const [tailorJobDescription, setTailorJobDescription] = useState('')
   const [isTailoring, setIsTailoring] = useState(false)
   const [tailorResult, setTailorResult] = useState<{ keySkills: string[], missingKeywords: string[], coverLetter: string } | null>(null)
+
+  // AI Job Fit & Skill Gap Analyst state
+  const [fitAnalysis, setFitAnalysis] = useState<FitAnalysisResult | null>(null)
+  const [calculatingFit, setCalculatingFit] = useState<boolean>(false)
+
+  useEffect(() => {
+    setFitAnalysis(null)
+  }, [selectedAppId])
 
   // AI Interview Coach state
   const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false)
@@ -256,6 +273,7 @@ export function KanbanBoardComponent() {
       setNewExpectedSalary('')
       setNewStage('WISHLIST')
       setNewResumeVersion('')
+      setNewDescription('')
       setRawDescription('')
       setExtractedTodos([])
     },
@@ -346,6 +364,7 @@ export function KanbanBoardComponent() {
     expectedSalary: z.number().int().nonnegative().nullable().optional(),
     stage: z.enum(['WISHLIST', 'APPLIED', 'ASSESSMENT', 'INTERVIEW', 'OFFERED', 'REJECTED']),
     resumeVersion: z.string().trim().nullable().optional(),
+    description: z.string().trim().nullable().optional(),
     todos: z.array(z.string()).optional(),
   })
 
@@ -366,6 +385,7 @@ export function KanbanBoardComponent() {
       expectedSalary: newExpectedSalary ? parseInt(newExpectedSalary, 10) : null,
       stage: newStage,
       resumeVersion: newResumeVersion.trim() || null,
+      description: newDescription.trim() || null,
       todos: extractedTodos.length > 0 ? extractedTodos : undefined,
     }
 
@@ -416,12 +436,49 @@ export function KanbanBoardComponent() {
       if (data.todos) {
         setExtractedTodos(data.todos)
       }
+      setNewDescription(rawDescription.trim())
 
       toast.success('Successfully parsed job posting!')
     } catch (err: any) {
       toast.error(friendlyError(err) || 'Failed to parse job description')
     } finally {
       setIsParsing(false)
+    }
+  }
+
+  // Handle AI Job Fit Score & Skill Gap Analyst calculation
+  const handleCalculateJobFit = async () => {
+    if (!selectedApplication) return
+
+    const jobDescription = selectedApplication.description || ''
+    if (!jobDescription.trim()) {
+      toast.error('Please paste a Job Description first in the field above.')
+      return
+    }
+
+    const resumeText = localStorage.getItem('user_resume_text') || ''
+    if (!resumeText.trim()) {
+      toast.error('Please configure your Master Resume first in the "Tailor Resume" modal.')
+      return
+    }
+
+    setCalculatingFit(true)
+    try {
+      const data = await apiFetch<FitAnalysisResult>(`${API_BASE}/ai/fit-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resumeText,
+          jobDescription,
+        }),
+      })
+
+      setFitAnalysis(data)
+      toast.success('Successfully calculated Job Fit & Skill Gaps!')
+    } catch (err: any) {
+      toast.error(friendlyError(err) || 'Failed to calculate Job Fit')
+    } finally {
+      setCalculatingFit(false)
     }
   }
 
@@ -1033,6 +1090,24 @@ export function KanbanBoardComponent() {
                     )}
                   </div>
 
+                  {/* Job Description Section */}
+                  <div className="bg-cream-50/50 p-4 rounded-xl border border-choco-100/50 space-y-2">
+                    <span className="text-choco-400 block font-bold uppercase tracking-wider text-xxs">Job Description / Requirements</span>
+                    <textarea
+                      key={selectedApplication.id}
+                      defaultValue={selectedApplication.description || ''}
+                      placeholder="Paste the job description or requirements here..."
+                      rows={4}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim()
+                        if (val !== (selectedApplication.description || '')) {
+                          updateApplicationMutation.mutate({ id: selectedApplication.id, description: val || null })
+                        }
+                      }}
+                      className="w-full text-xs p-2 bg-white border border-choco-100 rounded-lg focus:outline-none focus:ring-1 focus:ring-choco-400 focus:border-choco-400 placeholder-choco-300 font-sans text-choco-800 resize-none transition-all"
+                    />
+                  </div>
+
                   {/* Delete Application Option */}
                   <div>
                     <button
@@ -1045,6 +1120,127 @@ export function KanbanBoardComponent() {
                     >
                       <Trash2 size={14} /> Delete Application
                     </button>
+                  </div>
+
+                  {/* AI Job Fit & Skill Gap Analyst Section */}
+                  <div className="border-t border-choco-100 pt-4 flex flex-col space-y-3">
+                    <div className="bg-cream-50/50 p-4 rounded-xl border border-choco-100/50 space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-serif font-bold text-choco-900 text-sm flex items-center gap-1.5">
+                            <Bot size={16} className="text-choco-700" />
+                            AI Job Fit & Skill Gap Analyst
+                          </h4>
+                          <p className="text-xxs text-choco-500 font-medium">Evaluate CV match percentage, pros/cons, and missing key skills.</p>
+                        </div>
+                        <button
+                          onClick={handleCalculateJobFit}
+                          disabled={calculatingFit}
+                          className="bg-choco-850 hover:bg-choco-800 text-cream-50 px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs disabled:opacity-50"
+                        >
+                          {calculatingFit ? 'Analyzing...' : 'Analyze Fit'}
+                        </button>
+                      </div>
+
+                      {fitAnalysis && (
+                        <div className="space-y-4 pt-3 border-t border-choco-100/60 text-xs">
+                          {/* Visual score gauge */}
+                          <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-choco-100/30">
+                            <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+                              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                <path
+                                  className="text-choco-100"
+                                  strokeWidth="3"
+                                  stroke="currentColor"
+                                  fill="none"
+                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                                <path
+                                  className={
+                                    fitAnalysis.score >= 80 
+                                      ? 'text-green-600' 
+                                      : fitAnalysis.score >= 50 
+                                        ? 'text-amber-505' 
+                                        : 'text-red-500'
+                                  }
+                                  strokeWidth="3.2"
+                                  strokeDasharray={`${fitAnalysis.score}, 100`}
+                                  strokeLinecap="round"
+                                  stroke="currentColor"
+                                  fill="none"
+                                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                />
+                              </svg>
+                              <div className="absolute font-serif font-bold text-choco-900 text-sm">
+                                {fitAnalysis.score}%
+                              </div>
+                            </div>
+                            <div>
+                              <h5 className="font-serif font-bold text-choco-800 text-xs">Job Compatibility Score</h5>
+                              <p className="text-[10px] text-choco-500 mt-0.5 leading-relaxed">
+                                {fitAnalysis.score >= 80
+                                  ? 'Excellent match! You satisfy most requirements.'
+                                  : fitAnalysis.score >= 50
+                                    ? 'Good match. Some minor gaps identified.'
+                                    : 'Low match. Significant skill gaps found.'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Skill Gap breakdown */}
+                          <div className="space-y-1.5">
+                            <span className="font-bold text-choco-800 text-[10px] uppercase tracking-wider block">Skill Requirements Check</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {fitAnalysis.skillsBreakdown.map((item, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border flex items-center gap-1 ${
+                                    item.status === 'MATCH'
+                                      ? 'bg-green-50 text-green-700 border-green-200'
+                                      : item.status === 'PARTIAL'
+                                        ? 'bg-amber-550 text-amber-700 border-amber-200'
+                                        : 'bg-red-50 text-red-700 border-red-200'
+                                  }`}
+                                >
+                                  {item.skill}
+                                  <span className="text-[8px] opacity-75 uppercase">({item.status})</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Pros & Cons grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="bg-green-50/30 border border-green-100/50 p-3 rounded-xl space-y-1.5">
+                              <span className="font-bold text-green-800 text-[10px] uppercase tracking-wider block">Pros (Matches)</span>
+                              <ul className="list-disc list-inside space-y-1 text-choco-700 text-[11px] leading-relaxed">
+                                {fitAnalysis.pros.map((pro, idx) => (
+                                  <li key={idx}>{pro}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="bg-red-50/20 border border-red-100/40 p-3 rounded-xl space-y-1.5">
+                              <span className="font-bold text-red-800 text-[10px] uppercase tracking-wider block">Cons (Gaps)</span>
+                              <ul className="list-disc list-inside space-y-1 text-choco-700 text-[11px] leading-relaxed">
+                                {fitAnalysis.cons.map((con, idx) => (
+                                  <li key={idx}>{con}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+
+                          {/* Recommendations */}
+                          <div className="bg-cream-100/25 border border-choco-100/40 p-3 rounded-xl space-y-1.5">
+                            <span className="font-bold text-choco-800 text-[10px] uppercase tracking-wider block">Recommendations</span>
+                            <ul className="list-decimal list-inside space-y-1 text-choco-700 text-[11px] leading-relaxed">
+                              {fitAnalysis.recommendations.map((rec, idx) => (
+                                <li key={idx}>{rec}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* AI Tailoring Section */}
@@ -1831,6 +2027,19 @@ export function KanbanBoardComponent() {
                     className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-choco-500 mb-1">
+                  Job Description / Requirements (Optional)
+                </label>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Paste the job description or requirements here..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-choco-200 bg-cream-50/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-choco-500/20 font-sans resize-none transition-all text-choco-800"
+                />
               </div>
 
               <div className="flex justify-end gap-2 border-t border-choco-100 pt-3 mt-2">

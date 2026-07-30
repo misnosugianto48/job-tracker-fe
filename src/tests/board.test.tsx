@@ -112,6 +112,78 @@ describe("KanbanBoardComponent UI Tests", () => {
     expect(await screen.findByText(/AI Outreach Writer/i)).toBeInTheDocument();
   });
 
+  it("should successfully calculate and render AI Job Fit & Skill Gap Analysis", async () => {
+    // Override default query mock to return an application with a job description
+    const mockAppWithDesc = {
+      id: 1,
+      companyId: 1,
+      company: { name: "Mock Company", industry: "Tech", location: "Remote" },
+      jobTitle: "Software Engineer",
+      stage: "APPLIED",
+      postingUrl: "https://example.com/job",
+      expectedSalary: 12000000,
+      resumeVersion: "v1.0",
+      description: "Looking for React, Node, and TypeScript skills.",
+      todos: [],
+      notes: [],
+    };
+
+    // We'll mock the apiFetch responses for this test
+    vi.mocked(apiFetch).mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/applications/1")) {
+        return mockAppWithDesc;
+      }
+      if (url.includes("/fit-score")) {
+        return {
+          score: 85,
+          pros: ["Good React experience", "Good TypeScript"],
+          cons: ["No Node listed"],
+          recommendations: ["Highlight Node backend projects"],
+          skillsBreakdown: [
+            { skill: "React", status: "MATCH" },
+            { skill: "TypeScript", status: "MATCH" },
+            { skill: "Node", status: "MISSING" },
+          ],
+        };
+      }
+      // For dashboard stats and other queries
+      if (url.includes("/dashboard")) {
+        return { activeApplications: 1, totalApplications: 1, conversionRate: 100, stagnantApplications: [], upcomingInterviews: [] };
+      }
+      if (url.includes("/applications")) {
+        return [mockAppWithDesc];
+      }
+      return null;
+    });
+
+    renderComponent();
+
+    // Click card to open Details drawer
+    const card = await screen.findByText(/Software Engineer/i);
+    fireEvent.click(card);
+
+    // Verify Job Description is displayed
+    const textarea = await screen.findByPlaceholderText(/Paste the job description or requirements here.../i);
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).toHaveValue("Looking for React, Node, and TypeScript skills.");
+
+    // Click "Analyze Fit" button
+    const analyzeBtn = await screen.findByRole("button", { name: /Analyze Fit/i });
+    fireEvent.click(analyzeBtn);
+
+    // Verify visual compatibility score radial gauge percent
+    expect(await screen.findByText("85%")).toBeInTheDocument();
+    expect(screen.getByText(/Job Compatibility Score/i)).toBeInTheDocument();
+
+    // Verify Pros/Cons
+    expect(screen.getByText("Good React experience")).toBeInTheDocument();
+    expect(screen.getByText("No Node listed")).toBeInTheDocument();
+
+    // Verify Skill breakdown tags
+    expect(screen.getByText("React")).toBeInTheDocument();
+    expect(screen.getByText("Node")).toBeInTheDocument();
+  });
+
   it("should open practice session modal and start interview", async () => {
     renderComponent();
 
